@@ -32,9 +32,8 @@ pub struct CachedPage {
     pub data: Page,
     /// Storage for intermediate nodes
     pub cache: [[u8; 32]; PAGE_SIZE_WORDS],
-    /// Maps to true if the node is valid
-    /// TODO(clabby): Use a bitmap / roaring bitmap
-    pub valid: [bool; PAGE_SIZE_WORDS],
+    /// Bitmap for 128 nodes. 1 if valid, 0 if invalid.
+    valid: u128,
 }
 
 impl Default for CachedPage {
@@ -42,7 +41,7 @@ impl Default for CachedPage {
         Self {
             data: [0; PAGE_SIZE],
             cache: [[0; 32]; PAGE_SIZE_WORDS],
-            valid: [false; PAGE_SIZE_WORDS],
+            valid: 0,
         }
     }
 }
@@ -62,7 +61,7 @@ impl CachedPage {
         //     std::ptr::write_bytes(&mut self.valid[key as usize] as *mut bool, 0, len as usize);
         // }
         while key > 0 {
-            self.valid[key as usize] = false;
+            self.set_valid(key as usize, false);
             key >>= 1;
         }
 
@@ -70,29 +69,29 @@ impl CachedPage {
     }
 
     pub fn invalidate_full(&mut self) {
-        self.valid = [false; PAGE_SIZE >> 5];
+        self.valid = 0;
     }
 
     pub fn merkle_root(&mut self) -> B256 {
         // First, hash the bottom layer.
         for i in (0..PAGE_SIZE).step_by(64) {
             let j = (PAGE_SIZE_WORDS >> 1) + (i >> 6);
-            if self.valid[j] {
+            if self.is_valid(j) {
                 continue;
             }
 
             self.cache[j] = *keccak256(&self.data[i..i + 64]);
-            self.valid[j] = true;
+            self.set_valid(j, true);
         }
 
         // Then, hash the cache layers.
         for i in (1..=PAGE_SIZE_WORDS - 2).rev().step_by(2) {
             let j = i >> 1;
-            if self.valid[j] {
+            if self.is_valid(j) {
                 continue;
             }
             self.cache[j] = *keccak256(concat_fixed(self.cache[i], self.cache[i + 1]));
-            self.valid[j] = true;
+            self.set_valid(j, true);
         }
 
         self.cache[1].into()
@@ -114,6 +113,26 @@ impl CachedPage {
         }
 
         Ok(self.cache[g_index].into())
+    }
+
+    /// Check if a key is valid within the bitmap.
+    ///
+    /// ### Takes
+    /// - `key`: The key to check.
+    pub fn is_valid(&self, key: usize) -> bool {
+        let flag = 1 << (127 - key);
+        self.valid & flag == flag
+    }
+
+    /// Set a key as valid or invalid within the bitmap.
+    ///
+    /// ### Takes
+    /// - `key`: The key to set.
+    /// - `valid`: Whether the key should be set as valid or invalid.
+    pub fn set_valid(&mut self, key: usize, valid: bool) {
+        let flag_offset = 127 - key;
+        self.valid &= !(1 << flag_offset);
+        self.valid |= (valid as u128) << flag_offset;
     }
 }
 

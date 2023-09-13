@@ -1,4 +1,4 @@
-# `mipsevm`
+# `cannon-mipsevm`
 
 Supported 55 instructions:
 ```

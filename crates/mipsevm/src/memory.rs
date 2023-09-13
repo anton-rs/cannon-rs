@@ -57,7 +57,7 @@ impl Memory {
         if let Some(page) = self.page_lookup(address >> page::PAGE_ADDRESS_SIZE) {
             let mut page = page.borrow_mut();
             page.invalidate(address & page::PAGE_ADDRESS_MASK as u64)?;
-            if !page.valid[1] {
+            if !page.is_valid(1) {
                 return Ok(());
             }
         } else {
