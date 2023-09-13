@@ -2,7 +2,7 @@
 
 /// Concatenate two fixed sized arrays together into a new array with minimal reallocation.
 #[inline(always)]
-pub(crate) fn concat_arrays<T, const N: usize, const M: usize>(a: [T; N], b: [T; M]) -> [T; N + M]
+pub(crate) fn concat_fixed<T, const N: usize, const M: usize>(a: [T; N], b: [T; M]) -> [T; N + M]
 where
     T: Copy + Default,
 {

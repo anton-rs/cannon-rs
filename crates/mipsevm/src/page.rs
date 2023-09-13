@@ -1,31 +1,31 @@
 //! This module contains the data structure for a [Page] within the
 //! MIPS emulator's memory.
 
-use crate::utils::concat_arrays;
+use crate::utils::concat_fixed;
 use alloy_primitives::{keccak256, B256};
 use once_cell::sync::Lazy;
 
-const PAGE_ADDRESS_SIZE: usize = 12;
-const PAGE_KEY_SIZE: usize = 32 - PAGE_ADDRESS_SIZE;
-const PAGE_SIZE: usize = 1 << PAGE_ADDRESS_SIZE;
-const PAGE_ADDRESS_MASK: usize = PAGE_SIZE - 1;
-const MAX_PAGE_COUNT: usize = 1 << PAGE_KEY_SIZE;
-const PAGE_KEY_MASK: usize = MAX_PAGE_COUNT - 1;
-
-/// A [Page] is a portion of memory of size [PAGE_SIZE].
-type Page = [u8; PAGE_SIZE];
+pub(crate) const PAGE_ADDRESS_SIZE: usize = 12;
+pub(crate) const PAGE_KEY_SIZE: usize = 32 - PAGE_ADDRESS_SIZE;
+pub(crate) const PAGE_SIZE: usize = 1 << PAGE_ADDRESS_SIZE;
+pub(crate) const PAGE_ADDRESS_MASK: usize = PAGE_SIZE - 1;
+pub(crate) const MAX_PAGE_COUNT: usize = 1 << PAGE_KEY_SIZE;
+pub(crate) const PAGE_KEY_MASK: usize = MAX_PAGE_COUNT - 1;
 
 /// Precomputed hashes of each full-zero range sub-tree level.
-static ZERO_HASHES: Lazy<[B256; 256]> = Lazy::new(|| {
+pub(crate) static ZERO_HASHES: Lazy<[B256; 256]> = Lazy::new(|| {
     let mut out = [B256::ZERO; 256];
     for i in 1..256 {
-        out[i] = keccak256(concat_arrays(out[i - 1].into(), out[i - 1].into()))
+        out[i] = keccak256(concat_fixed(out[i - 1].into(), out[i - 1].into()))
     }
     out
 });
 
+/// A [Page] is a portion of memory of size [PAGE_SIZE].
+pub type Page = [u8; PAGE_SIZE];
+
 /// A [CachedPage] is a [Page] with an in-memory cache of intermediate nodes.
-struct CachedPage {
+pub struct CachedPage {
     data: Page,
     /// Storage for intermediate nodes
     cache: [[u8; 32]; PAGE_SIZE >> 5],
@@ -71,7 +71,7 @@ impl CachedPage {
     pub fn merkle_root(&mut self) -> B256 {
         // First, hash the bottom layer.
         for i in (0..PAGE_SIZE).step_by(64) {
-            let j = PAGE_SIZE >> 5 + i >> 5;
+            let j = (PAGE_SIZE >> 6) + (i >> 6);
             if self.valid[j] {
                 continue;
             }
@@ -81,12 +81,12 @@ impl CachedPage {
         }
 
         // Then, hash the cache layers.
-        for i in (1..=PAGE_SIZE >> 5 - 2).rev().step_by(2) {
+        for i in (1..=(PAGE_SIZE >> 5) - 2).rev().step_by(2) {
             let j = i >> 1;
             if self.valid[j] {
                 continue;
             }
-            self.cache[j] = *keccak256(concat_arrays(self.cache[i], self.cache[i + 1]));
+            self.cache[j] = *keccak256(concat_fixed(self.cache[i], self.cache[i + 1]));
             self.valid[j] = true;
         }
 
@@ -98,12 +98,12 @@ impl CachedPage {
         let _ = self.merkle_root();
 
         if g_index >= PAGE_SIZE >> 5 {
-            if g_index >= PAGE_SIZE >> 5 * 2 {
+            if g_index >= (PAGE_SIZE >> 5) * 2 {
                 panic!("Gindex too deep");
             }
 
             let node_index = g_index & (PAGE_ADDRESS_MASK >> 5);
-            return B256::from_slice(&self.data[(node_index << 5)..(node_index << 5 + 32)]);
+            return B256::from_slice(&self.data[node_index << 5..(node_index << 5) + 32]);
         }
 
         self.cache[g_index].into()
@@ -126,12 +126,12 @@ mod test {
         assert_eq!(node, expected_leaf, "Leaf nodes should not be hashed");
 
         let node = page.merklize_subtree(g_index >> 1);
-        let expected_parent = keccak256(concat_arrays(ZERO_HASHES[0].into(), expected_leaf.into()));
+        let expected_parent = keccak256(concat_fixed(ZERO_HASHES[0].into(), expected_leaf.into()));
         assert_eq!(node, expected_parent, "Parent should be correct");
 
         let node = page.merklize_subtree(g_index >> 2);
         let expected_grandparent =
-            keccak256(concat_arrays(expected_parent.into(), ZERO_HASHES[1].into()));
+            keccak256(concat_fixed(expected_parent.into(), ZERO_HASHES[1].into()));
         assert_eq!(node, expected_grandparent, "Grandparent should be correct");
 
         let pre = page.merkle_root();
