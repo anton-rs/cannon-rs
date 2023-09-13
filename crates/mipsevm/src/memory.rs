@@ -28,18 +28,18 @@ static ZERO_HASHES: Lazy<[B256; 256]> = Lazy::new(|| {
 struct CachedPage {
     data: Page,
     /// Storage for intermediate nodes
-    cache: [[u8; 32]; PAGE_SIZE / 32],
+    cache: [[u8; 32]; PAGE_SIZE >> 5],
     /// Maps to true if the node is valid
     /// TODO(clabby): Use a bitmap / roaring bitmap
-    valid: [bool; PAGE_SIZE / 32],
+    valid: [bool; PAGE_SIZE >> 5],
 }
 
 impl Default for CachedPage {
     fn default() -> Self {
         Self {
             data: [0; PAGE_SIZE],
-            cache: [[0; 32]; PAGE_SIZE / 32],
-            valid: [false; PAGE_SIZE / 32],
+            cache: [[0; 32]; PAGE_SIZE >> 5],
+            valid: [false; PAGE_SIZE >> 5],
         }
     }
 }
@@ -53,11 +53,10 @@ impl CachedPage {
         // The first cache layer caches nodes that have two 32 byte leaf nodes.
         let mut key = ((1 << PAGE_ADDRESS_SIZE) | page_addr) >> 6;
 
-        // SAFETY: lol arrrg no looping
+        // SAFETY: mempirate no looping, me clock cycles
         // unsafe {
-        //     let len =
-        //         ((key + key.leading_zeros()) - key + 1) as usize * std::mem::size_of::<bool>();
-        //     std::ptr::write_bytes(&mut self.valid[key as usize] as *mut bool, 0, len)
+        //     let len = (31 - key.leading_zeros()) + 1;
+        //     std::ptr::write_bytes(&mut self.valid[key as usize] as *mut bool, 0, len as usize);
         // }
         while key > 0 {
             self.valid[key as usize] = false;
@@ -66,13 +65,13 @@ impl CachedPage {
     }
 
     pub fn invalidate_full(&mut self) {
-        self.valid = [false; PAGE_SIZE / 32];
+        self.valid = [false; PAGE_SIZE >> 5];
     }
 
     pub fn merkle_root(&mut self) -> B256 {
         // First, hash the bottom layer.
         for i in (0..PAGE_SIZE).step_by(64) {
-            let j = PAGE_SIZE / 64 + i / 64;
+            let j = PAGE_SIZE >> 5 + i >> 5;
             if self.valid[j] {
                 continue;
             }
@@ -82,7 +81,7 @@ impl CachedPage {
         }
 
         // Then, hash the cache layers.
-        for i in (1..=PAGE_SIZE / 32 - 2).rev().step_by(2) {
+        for i in (1..=PAGE_SIZE >> 5 - 2).rev().step_by(2) {
             let j = i >> 1;
             if self.valid[j] {
                 continue;
@@ -98,13 +97,13 @@ impl CachedPage {
         // Fill the cache by computing the merkle root.
         let _ = self.merkle_root();
 
-        if g_index >= PAGE_SIZE / 32 {
-            if g_index >= PAGE_SIZE / 32 * 2 {
+        if g_index >= PAGE_SIZE >> 5 {
+            if g_index >= PAGE_SIZE >> 5 * 2 {
                 panic!("Gindex too deep");
             }
 
             let node_index = g_index & (PAGE_ADDRESS_MASK >> 5);
-            return B256::from_slice(&self.data[(node_index * 32)..(node_index * 32 + 32)]);
+            return B256::from_slice(&self.data[(node_index << 5)..(node_index << 5 + 32)]);
         }
 
         self.cache[g_index].into()
