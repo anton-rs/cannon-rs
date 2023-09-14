@@ -11,4 +11,5 @@
 * ...running compiled Go code
 * ...that runs an EVM
 
+
 [cannon]: https://github.com/ethereum-optimism/optimism/tree/develop/cannon
