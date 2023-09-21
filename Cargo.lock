@@ -145,6 +145,7 @@ dependencies = [
  "anyhow",
  "fnv",
  "once_cell",
+ "rand",
  "serde",
  "serde_json",
  "tracing",
