@@ -1,7 +1,7 @@
 //! This module contains the data structure for the state of the MIPS emulator.
 
 use crate::{witness::STATE_WITNESS_SIZE, Memory, StateWitness, VMStatus};
-use alloy_primitives::{Bytes, B256};
+use alloy_primitives::B256;
 use anyhow::Result;
 
 #[derive(Debug, Default)]
@@ -23,7 +23,7 @@ pub struct State {
     pub exited: bool,
     pub step: u64,
     pub registers: [u32; 32],
-    pub last_hint: Bytes,
+    pub last_hint: Vec<u8>,
 }
 
 impl State {

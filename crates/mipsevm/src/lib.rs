@@ -12,7 +12,7 @@ mod state;
 pub use self::state::State;
 
 mod traits;
-pub use self::traits::StateWitnessHasher;
+pub use self::traits::{PreimageOracle, StateWitnessHasher};
 
 mod witness;
 
@@ -22,3 +22,4 @@ mod types;
 pub use types::{Address, Fd, Gindex, Page, PageIndex, StateWitness, VMStatus};
 
 mod mips;
+pub use mips::InstrumentedState;
