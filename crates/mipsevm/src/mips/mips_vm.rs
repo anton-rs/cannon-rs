@@ -280,6 +280,75 @@ where
 
         Ok(())
     }
+
+    /// Handles a hi/lo instruction within the MIPS thread context emulation.
+    ///
+    /// ### Takes
+    /// - `fun`: The function code of the instruction.
+    /// - `rs`: The register index of the source register.
+    /// - `rt`: The register index of the target register.
+    /// - `store_reg`: The register index of the register to store the result in.
+    ///
+    /// ### Returns
+    /// - A [Result] indicating if the branch dispatch was successful.
+    pub fn handle_hi_lo(&mut self, fun: u32, rs: u32, rt: u32, store_reg: u32) -> Result<()> {
+        let val = match fun {
+            0x10 => {
+                // mfhi
+                self.state.hi
+            }
+            0x11 => {
+                // mthi
+                self.state.hi = rs;
+                0
+            }
+            0x12 => {
+                // mflo
+                self.state.lo
+            }
+            0x13 => {
+                // mtlo
+                self.state.lo = rs;
+                0
+            }
+            0x18 => {
+                // mult
+                let acc = (rs as i64) as u64 * (rt as i64) as u64;
+                self.state.hi = (acc >> 32) as u32;
+                self.state.lo = acc as u32;
+                0
+            }
+            0x19 => {
+                // multu
+                let acc = rs as u64 * rt as u64;
+                self.state.hi = (acc >> 32) as u32;
+                self.state.lo = acc as u32;
+                0
+            }
+            0x1a => {
+                // div
+                self.state.hi = (rs as i32 % rt as i32) as u32;
+                self.state.lo = (rs as i32 / rt as i32) as u32;
+                0
+            }
+            0x1b => {
+                // divu
+                self.state.hi = rs % rt;
+                self.state.lo = rs / rt;
+                0
+            }
+            _ => 0,
+        };
+
+        if store_reg != 0 {
+            self.state.registers[store_reg as usize] = val;
+        }
+
+        self.state.pc = self.state.next_pc;
+        self.state.next_pc += 4;
+
+        Ok(())
+    }
 }
 
 /// Perform a sign extension of a value embedded in the lower bits of `data` up to
