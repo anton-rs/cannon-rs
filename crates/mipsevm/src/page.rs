@@ -72,6 +72,10 @@ impl CachedPage {
         self.valid = 0;
     }
 
+    /// Compute the merkle root of the [Page].
+    ///
+    /// ## Returns
+    /// - The 32 byte merkle root hash of the [Page].
     pub fn merkle_root(&mut self) -> B256 {
         // First, hash the bottom layer.
         for i in (0..PAGE_SIZE).step_by(64) {

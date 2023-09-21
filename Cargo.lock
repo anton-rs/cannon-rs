@@ -143,6 +143,7 @@ version = "0.1.0"
 dependencies = [
  "alloy-primitives",
  "anyhow",
+ "fnv",
  "once_cell",
  "serde",
  "serde_json",
