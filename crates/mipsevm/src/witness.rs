@@ -11,8 +11,8 @@ impl StateWitnessHasher for StateWitness {
         let mut hash = keccak256(self);
         let offset = 32 * 2 + 4 * 6;
         let exit_code = self[offset];
-        let exited = self[offset + 1];
-        hash[0] = State::vm_status(exited == 1, exit_code) as u8;
+        let exited = self[offset + 1] == 1;
+        hash[0] = State::vm_status(exited, exit_code) as u8;
         hash
     }
 }

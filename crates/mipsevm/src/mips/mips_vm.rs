@@ -165,24 +165,81 @@ where
                     }
                 },
                 Syscall::Write => match (a0 as u8).try_into() {
-                    Ok(Fd::Stdout) => {
-                        let _reader = MemoryReader::new(
+                    Ok(fd @ (Fd::Stdout | Fd::StdErr)) => {
+                        let mut reader = MemoryReader::new(
                             Rc::clone(&self.state.memory),
                             a1 as Address,
                             a2 as u64,
                         );
-                        todo!()
+                        std::io::copy(
+                            &mut reader,
+                            if matches!(fd, Fd::Stdout) {
+                                &mut self.std_out
+                            } else {
+                                &mut self.std_err
+                            },
+                        )?;
+                        v0 = a2;
                     }
-                    Ok(Fd::StdErr) => {
-                        let _reader = MemoryReader::new(
+                    Ok(Fd::HintWrite) => {
+                        let mut reader = MemoryReader::new(
                             Rc::clone(&self.state.memory),
                             a1 as Address,
                             a2 as u64,
                         );
-                        todo!()
+                        // TODO(clabby): perf: Vec reallocation bad
+                        let mut hint_data = Vec::default();
+                        reader.read_to_end(&mut hint_data)?;
+                        self.state.last_hint.extend_from_slice(hint_data.as_slice());
+
+                        // Continue processing while there is enough data to check if there are any
+                        // hints.
+                        while self.state.last_hint.len() >= 4 {
+                            let hint_len =
+                                u32::from_be_bytes(self.state.last_hint[..4].try_into()?);
+                            if hint_len >= self.state.last_hint.len() as u32 - 4 {
+                                let hint = &self.state.last_hint[4..4 + hint_len as usize];
+
+                                // TODO(clabby): Ordering could be an issue here.
+                                self.preimage_oracle.hint(hint);
+                                self.state.last_hint =
+                                    self.state.last_hint[4 + hint_len as usize..].into();
+                            } else {
+                                break;
+                            }
+                        }
                     }
-                    Ok(Fd::HintWrite) => {}
-                    Ok(Fd::PreimageWrite) => {}
+                    Ok(Fd::PreimageWrite) => {
+                        // TODO(clabby): This one's broken, `copy_from_slice` not the move here.
+                        // Should be using a reader.
+
+                        let effective_address = a1 & 0xFFFFFFFC;
+                        self.track_mem_access(effective_address as Address)?;
+
+                        let memory = self
+                            .state
+                            .memory
+                            .borrow_mut()
+                            .get_memory(effective_address as Address)?;
+                        let mut key = self.state.preimage_key;
+                        let alignment = a1 & 0x3;
+                        let space = 4 - alignment;
+
+                        let mut a2 = a2;
+                        if space < a2 {
+                            a2 = space;
+                        }
+
+                        let key_copy = key;
+                        key.copy_from_slice(&key_copy[a2 as usize..]);
+
+                        let mut tmp = memory.to_be_bytes();
+                        tmp[alignment as usize..].copy_from_slice(&key[32 - a2 as usize..]);
+
+                        self.state.preimage_key = key;
+                        self.state.preimage_offset = 0;
+                        v0 = a2;
+                    }
                     _ => {
                         v0 = 0xFFFFFFFF;
                         v1 = MIPS_EBADF;
