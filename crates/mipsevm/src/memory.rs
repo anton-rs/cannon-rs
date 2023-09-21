@@ -1,4 +1,4 @@
-//! The memory module contains the memory data structures and functionality for the emulator.
+//! The memory module contains the [Memory] data structure and its functionality for the emulator.
 
 use crate::{
     page::{self, CachedPage},
@@ -9,14 +9,21 @@ use anyhow::Result;
 use fnv::FnvHashMap;
 use std::{cell::RefCell, rc::Rc};
 
-type PageIndex = u64;
+/// A [PageIndex] is
+pub type PageIndex = u64;
+
+/// A [Gindex] is a generalized index, defined as $2^{\text{depth}} + \text{index}$.
+pub type Gindex = u64;
+
+/// An [Address] is a 64 bit address in the MIPS emulator's memory.
+pub type Address = u64;
 
 /// The [Memory] struct represents the MIPS emulator's memory.
-struct Memory {
+pub struct Memory {
     /// Map of generalized index -> the merkle root of each index. None if invalidated.
-    nodes: FnvHashMap<u64, Option<B256>>,
+    nodes: FnvHashMap<Gindex, Option<B256>>,
     /// Map of page indices to [CachedPage]s.
-    pages: FnvHashMap<u64, Rc<RefCell<CachedPage>>>,
+    pages: FnvHashMap<PageIndex, Rc<RefCell<CachedPage>>>,
     /// We store two caches upfront; we often read instructions from one page and reserve another
     /// for scratch memory. This prevents map lookups for each instruction.
     last_page: [(PageIndex, Option<Rc<RefCell<CachedPage>>>); 2],
@@ -41,8 +48,8 @@ impl Memory {
     /// Performs an operation on all pages in the memory.
     ///
     /// ### Takes
-    /// - `f`: A function that takes a page index and a mutable reference to a [CachedPage].
-    pub fn for_each_page(&mut self, mut f: impl FnMut(u64, Rc<RefCell<CachedPage>>)) {
+    /// - `f`: A function that takes a [PageIndex] and a shared reference to a [CachedPage].
+    pub fn for_each_page(&mut self, mut f: impl FnMut(PageIndex, Rc<RefCell<CachedPage>>)) {
         for (key, page) in self.pages.iter() {
             f(*key, Rc::clone(page));
         }
@@ -52,7 +59,10 @@ impl Memory {
     ///
     /// ### Takes
     /// - `address`: The address to invalidate.
-    pub fn invalidate(&mut self, address: u64) -> Result<()> {
+    ///
+    /// ### Returns
+    /// - A [Result] indicating if the operation was successful.
+    pub fn invalidate(&mut self, address: Address) -> Result<()> {
         if address & 0x3 != 0 {
             panic!("Unaligned memory access: {:x}", address);
         }
@@ -79,6 +89,14 @@ impl Memory {
         Ok(())
     }
 
+    /// Lookup a page in the [Memory]. This function will consult the cache before checking the
+    /// maps, and will cache the page if it is not already cached.
+    ///
+    /// ### Takes
+    /// - `page_index`: The page index to look up.
+    ///
+    /// ### Returns
+    /// - A reference to the [CachedPage] if it exists.
     fn page_lookup(&mut self, page_index: PageIndex) -> Option<Rc<RefCell<CachedPage>>> {
         // Check caches before maps
         if let Some((_, Some(page))) = self.last_page.iter().find(|(key, _)| *key == page_index) {
@@ -94,9 +112,9 @@ impl Memory {
         }
     }
 
-    fn merklize_subtree(&mut self, g_index: u64) -> Result<B256> {
+    fn merklize_subtree(&mut self, g_index: Gindex) -> Result<B256> {
         // Fetch the amount of bits required to represent the generalized index
-        let bits = 128 - g_index.leading_zeros();
+        let bits = 64 - g_index.leading_zeros();
         if bits > 28 {
             anyhow::bail!("Gindex is too deep")
         }
@@ -150,7 +168,7 @@ impl Memory {
     ///
     /// ### Returns
     /// - The 896 bit merkle proof for the given address.
-    fn merkle_proof(&mut self, address: u32) -> Result<[u8; 28 << 5]> {
+    fn merkle_proof(&mut self, address: Address) -> Result<[u8; 28 << 5]> {
         let proof = self.traverse_branch(1, address, 0)?;
         let mut proof_out = [0u8; 28 << 5];
 
@@ -163,7 +181,21 @@ impl Memory {
         Ok(proof_out)
     }
 
-    fn traverse_branch(&mut self, parent: u64, address: u32, depth: u8) -> Result<Vec<B256>> {
+    /// Traverse a branch of the merkle tree, generating a proof for the given address.
+    ///
+    /// ### Takes
+    /// - `parent`: The generalized index of the parent node.
+    /// - `address`: The address to generate the proof for.
+    /// - `depth`: The depth of the branch.
+    ///
+    /// ### Returns
+    /// - The merkle proof for the given address.
+    fn traverse_branch(
+        &mut self,
+        parent: Gindex,
+        address: Address,
+        depth: u8,
+    ) -> Result<Vec<B256>> {
         if depth == 32 - 5 {
             let mut proof = Vec::with_capacity(32 - 5 + 1);
             proof.push(self.merklize_subtree(parent)?);
@@ -186,7 +218,16 @@ impl Memory {
         Ok(proof)
     }
 
-    fn set_memory(&mut self, address: u64, value: u32) -> Result<()> {
+    /// Set a 32 bit value in the [Memory] at a given address.
+    /// This will invalidate the page at the given address, or allocate a new page if it does not exist.
+    ///
+    /// ### Takes
+    /// - `address`: The address to set the value at.
+    /// - `value`: The 32 bit value to set.
+    ///
+    /// ### Returns
+    /// - A [Result] indicating if the operation was successful.
+    fn set_memory(&mut self, address: Address, value: u32) -> Result<()> {
         // Address must be aligned to 4 bytes
         if address & 0x3 != 0 {
             anyhow::bail!("Unaligned memory access: {:x}", address);
@@ -216,11 +257,11 @@ impl Memory {
     /// Retrieve a 32 bit value from the [Memory] at a given address.
     ///
     /// ### Takes
-    /// - `address`: The address to retrieve the value from.
+    /// - `address`: The [Address] to retrieve the value from.
     ///
     /// ### Returns
     /// - The 32 bit value at the given address.
-    fn get_memory(&mut self, address: u64) -> Result<u32> {
+    fn get_memory(&mut self, address: Address) -> Result<u32> {
         // Address must be aligned to 4 bytes
         if address & 0x3 != 0 {
             anyhow::bail!("Unaligned memory access: {:x}", address);
@@ -243,7 +284,7 @@ impl Memory {
     ///
     /// ### Returns
     /// - A reference to the allocated [CachedPage].
-    fn alloc_page(&mut self, page_index: u64) -> Result<Rc<RefCell<CachedPage>>> {
+    fn alloc_page(&mut self, page_index: PageIndex) -> Result<Rc<RefCell<CachedPage>>> {
         let page = Rc::new(RefCell::new(CachedPage::default()));
         self.pages.insert(page_index, Rc::clone(&page));
 
@@ -257,4 +298,40 @@ impl Memory {
 }
 
 #[cfg(test)]
-mod test {}
+mod test {
+    use super::Memory;
+    use crate::utils::concat_fixed;
+    use alloy_primitives::{keccak256, B256};
+
+    #[test]
+    fn test_memory_merkle_proof() {
+        let mut memory = Memory::default();
+        memory.set_memory(0x10000, 0xaabbccdd).unwrap();
+        let proof = memory.merkle_proof(0x10000).unwrap();
+        assert_eq!([0xaa, 0xbb, 0xcc, 0xdd], proof[..4]);
+        (0..32 - 5).for_each(|i| {
+            let start = 32 + i * 32;
+            assert_eq!(crate::page::ZERO_HASHES[i], proof[start..start + 32]);
+        });
+
+        let mut memory = Memory::default();
+        memory.set_memory(0x10000, 0xaabbccdd).unwrap();
+        memory.set_memory(0x80004, 42).unwrap();
+        memory.set_memory(0x13370000, 123).unwrap();
+        let root = memory.merkle_root().unwrap();
+        let proof = memory.merkle_proof(0x80004).unwrap();
+        assert_eq!([0x00, 0x00, 0x00, 0x2a], proof[4..8]);
+        let mut node: B256 = proof[..32].try_into().unwrap();
+        let mut path = 0x80004 >> 5;
+        (32..proof.len()).step_by(32).for_each(|i| {
+            let sib: B256 = proof[i..i + 32].try_into().unwrap();
+            if path & 1 != 0 {
+                node = keccak256(concat_fixed(sib.into(), node.into()));
+            } else {
+                node = keccak256(concat_fixed(node.into(), sib.into()));
+            }
+            path >>= 1;
+        });
+        assert_eq!(root, node, "proof must verify");
+    }
+}
