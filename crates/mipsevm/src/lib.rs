@@ -9,9 +9,12 @@ mod page;
 pub use self::page::{CachedPage, Page};
 
 mod state;
-pub use self::state::{State, StateWitness};
+pub use self::state::State;
 
 mod traits;
 pub use self::traits::StateWitnessHasher;
+
+mod witness;
+pub use self::witness::StateWitness;
 
 mod utils;
