@@ -106,7 +106,7 @@ impl CachedPage {
         self.cache[1].into()
     }
 
-    pub fn merklize_subtree(&mut self, g_index: usize) -> Result<B256> {
+    pub fn merkleize_subtree(&mut self, g_index: usize) -> Result<B256> {
         // Fill the cache by computing the merkle root.
         let _ = self.merkle_root();
 
@@ -155,16 +155,16 @@ mod test {
         page.data[42] = 0xab;
 
         let g_index = ((1 << PAGE_ADDRESS_SIZE) | 42) >> 5;
-        let node = page.merklize_subtree(g_index).unwrap();
+        let node = page.merkleize_subtree(g_index).unwrap();
         let mut expected_leaf = B256::ZERO;
         expected_leaf[10] = 0xab;
         assert_eq!(node, expected_leaf, "Leaf nodes should not be hashed");
 
-        let node = page.merklize_subtree(g_index >> 1).unwrap();
+        let node = page.merkleize_subtree(g_index >> 1).unwrap();
         let expected_parent = keccak_concat_fixed(ZERO_HASHES[0].into(), expected_leaf.into());
         assert_eq!(node, expected_parent, "Parent should be correct");
 
-        let node = page.merklize_subtree(g_index >> 2).unwrap();
+        let node = page.merkleize_subtree(g_index >> 2).unwrap();
         let expected_grandparent =
             keccak_concat_fixed(expected_parent.into(), ZERO_HASHES[1].into());
         assert_eq!(node, expected_grandparent, "Grandparent should be correct");

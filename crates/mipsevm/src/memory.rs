@@ -71,8 +71,14 @@ impl Memory {
         match self.page_lookup(address >> page::PAGE_ADDRESS_SIZE) {
             Some(page) => {
                 let mut page = page.borrow_mut();
+                let prev_valid = !page.is_valid(1);
+
+                // Invalidate the address within the page.
                 page.invalidate(address & page::PAGE_ADDRESS_MASK as u64)?;
-                if !page.is_valid(1) {
+
+                // If the page was already invalid before, then nodes to the memory
+                // root will also still be invalid.
+                if prev_valid {
                     return Ok(());
                 }
             }
@@ -116,7 +122,7 @@ impl Memory {
         }
     }
 
-    pub fn merklize_subtree(&mut self, g_index: Gindex) -> Result<B256> {
+    pub fn merkleize_subtree(&mut self, g_index: Gindex) -> Result<B256> {
         // Fetch the amount of bits required to represent the generalized index
         let bits = 64 - g_index.leading_zeros();
         if bits > 28 {
@@ -131,7 +137,7 @@ impl Memory {
                 |page| {
                     let page_g_index =
                         (1 << depth_into_page) | (g_index & ((1 << depth_into_page) - 1));
-                    page.borrow_mut().merklize_subtree(page_g_index as usize)
+                    page.borrow_mut().merkleize_subtree(page_g_index as usize)
                 },
             );
         }
@@ -148,8 +154,8 @@ impl Memory {
             return Ok(page::ZERO_HASHES[28 - bits as usize]);
         }
 
-        let left = self.merklize_subtree(g_index << 1)?;
-        let right = self.merklize_subtree((g_index << 1) | 1)?;
+        let left = self.merkleize_subtree(g_index << 1)?;
+        let right = self.merkleize_subtree((g_index << 1) | 1)?;
         let result = keccak_concat_fixed(left.into(), right.into());
 
         self.nodes.insert(g_index, Some(result));
@@ -162,7 +168,7 @@ impl Memory {
     /// ### Returns
     /// - The 32 byte merkle root hash of the [Memory].
     pub fn merkle_root(&mut self) -> Result<B256> {
-        self.merklize_subtree(1)
+        self.merkleize_subtree(1)
     }
 
     /// Compute the merkle proof for the given address in the [Memory].
@@ -202,7 +208,7 @@ impl Memory {
     ) -> Result<Vec<B256>> {
         if depth == 32 - 5 {
             let mut proof = Vec::with_capacity(32 - 5 + 1);
-            proof.push(self.merklize_subtree(parent)?);
+            proof.push(self.merkleize_subtree(parent)?);
             return Ok(proof);
         }
 
@@ -217,7 +223,7 @@ impl Memory {
         }
 
         let mut proof = self.traverse_branch(local, address, depth + 1)?;
-        let sibling_node = self.merklize_subtree(sibling)?;
+        let sibling_node = self.merkleize_subtree(sibling)?;
         proof.push(sibling_node);
         Ok(proof)
     }
@@ -310,7 +316,7 @@ impl Memory {
     ///
     /// ### Returns
     /// - A [Result] indicating if the operation was successful.
-    pub fn set_memory_range(&mut self, address: Address, data: &[u8]) -> Result<()> {
+    pub fn set_memory_range<T: Read>(&mut self, address: Address, data: T) -> Result<()> {
         let mut address = address;
         let mut data = data;
         loop {
@@ -333,6 +339,54 @@ impl Memory {
                 Err(e) => return Err(e.into()),
             };
         }
+    }
+}
+
+pub struct MemoryReader {
+    memory: Rc<RefCell<Memory>>,
+    address: Address,
+    count: u64,
+}
+
+impl MemoryReader {
+    fn new(memory: Rc<RefCell<Memory>>, address: Address, count: u64) -> Self {
+        Self {
+            memory,
+            address,
+            count,
+        }
+    }
+}
+
+impl Read for MemoryReader {
+    fn read(&mut self, buf: &mut [u8]) -> Result<usize, std::io::Error> {
+        if self.count == 0 {
+            return Ok(0);
+        }
+
+        let end_address = self.address + self.count;
+
+        let page_index = self.address >> page::PAGE_ADDRESS_SIZE as u64;
+        let start = self.address as usize & page::PAGE_ADDRESS_MASK;
+        let mut end = page::PAGE_SIZE;
+
+        if page_index == (end_address >> page::PAGE_ADDRESS_SIZE as u64) {
+            end = end_address as usize & page::PAGE_ADDRESS_MASK;
+        }
+        let n = end - start;
+        match self.memory.borrow_mut().page_lookup(page_index) {
+            Some(page) => {
+                buf.copy_from_slice(&page.borrow().data[start..end as usize]);
+            }
+            None => {
+                let mut z = Vec::with_capacity(n);
+                z.resize(n, 0);
+                buf.copy_from_slice(z.as_slice());
+            }
+        };
+        self.address += n as u64;
+        self.count -= n as u64;
+        Ok(n)
     }
 }
 
@@ -445,13 +499,13 @@ mod test {
                 .set_memory(page::PAGE_SIZE as Address * 6, 123)
                 .unwrap();
             let p3 = memory
-                .merklize_subtree((1 << page::PAGE_KEY_SIZE) | 3)
+                .merkleize_subtree((1 << page::PAGE_KEY_SIZE) | 3)
                 .unwrap();
             let p5 = memory
-                .merklize_subtree((1 << page::PAGE_KEY_SIZE) | 5)
+                .merkleize_subtree((1 << page::PAGE_KEY_SIZE) | 5)
                 .unwrap();
             let p6 = memory
-                .merklize_subtree((1 << page::PAGE_KEY_SIZE) | 6)
+                .merkleize_subtree((1 << page::PAGE_KEY_SIZE) | 6)
                 .unwrap();
             let z = page::ZERO_HASHES[page::PAGE_ADDRESS_SIZE - 5];
             let r1 = keccak_concat_fixed(
@@ -467,7 +521,7 @@ mod test {
                 .into(),
             );
             let r2 = memory
-                .merklize_subtree(1 << (page::PAGE_KEY_SIZE - 3))
+                .merkleize_subtree(1 << (page::PAGE_KEY_SIZE - 3))
                 .unwrap();
             assert_eq!(
                 r1, r2,
@@ -476,15 +530,7 @@ mod test {
         }
 
         #[test]
-        #[ignore]
         fn invalidate_page() {
-            // 		m := NewMemory()
-            // 		m.SetMemory(0xF000, 0)
-            // 		require.Equal(t, zeroHashes[32-5], m.MerkleRoot(), "zero at first")
-            // 		m.SetMemory(0xF004, 1)
-            // 		require.NotEqual(t, zeroHashes[32-5], m.MerkleRoot(), "non-zero")
-            // 		m.SetMemory(0xF004, 0)
-            // 		require.Equal(t, zeroHashes[32-5], m.MerkleRoot(), "zero again")
             let mut memory = Memory::default();
             memory.set_memory(0xF000, 0).unwrap();
             assert_eq!(
@@ -509,7 +555,9 @@ mod test {
 
     mod read_write {
         use super::*;
+        use crate::memory::MemoryReader;
         use rand::RngCore;
+        use std::{cell::RefCell, io::Read, rc::Rc};
 
         #[test]
         fn large_random() {
@@ -525,6 +573,58 @@ mod test {
                     u32::from_be_bytes(data[i as usize..i as usize + 4].try_into().unwrap());
                 assert_eq!(expected, value, "read at {}", i);
             }
+        }
+
+        #[test]
+        fn repeat_range() {
+            let memory = Rc::new(RefCell::new(Memory::default()));
+            let data = b"under the big bright yellow sun".repeat(40);
+            memory
+                .borrow_mut()
+                .set_memory_range(0x1337, &data[..])
+                .expect("Should not error");
+
+            let mut reader =
+                MemoryReader::new(Rc::clone(&memory), 0x1337 - 10, data.len() as u64 + 20);
+            let mut buf = Vec::with_capacity(1260);
+            buf.resize(1260, 0);
+            reader.read(&mut buf).unwrap();
+
+            assert_eq!([0u8; 10], buf[..10], "empty start");
+            assert_eq!(data[..], buf[10..buf.len() - 10], "result");
+            assert_eq!([0u8; 10], buf[buf.len() - 10..], "empty end");
+        }
+
+        #[test]
+        fn read_write() {
+            let mut memory = Memory::default();
+            memory.set_memory(12, 0xaabbccdd).unwrap();
+            assert_eq!(0xaabbccdd, memory.get_memory(12).unwrap());
+            memory.set_memory(12, 0xaabbc1dd).unwrap();
+            assert_eq!(0xaabbc1dd, memory.get_memory(12).unwrap());
+        }
+
+        #[test]
+        fn unaligned_read() {
+            let mut memory = Memory::default();
+            memory.set_memory(12, 0xaabbccdd).unwrap();
+            memory.set_memory(16, 0x11223344).unwrap();
+            assert!(memory.get_memory(13).is_err());
+            assert!(memory.get_memory(14).is_err());
+            assert!(memory.get_memory(15).is_err());
+            assert_eq!(0x11223344, memory.get_memory(16).unwrap());
+            assert_eq!(0, memory.get_memory(20).unwrap());
+            assert_eq!(0xaabbccdd, memory.get_memory(12).unwrap());
+        }
+
+        #[test]
+        fn unaligned_write() {
+            let mut memory = Memory::default();
+            memory.set_memory(12, 0xaabbccdd).unwrap();
+            assert!(memory.set_memory(13, 0x11223344).is_err());
+            assert!(memory.set_memory(14, 0x11223344).is_err());
+            assert!(memory.set_memory(15, 0x11223344).is_err());
+            assert_eq!(0xaabbccdd, memory.get_memory(12).unwrap());
         }
     }
 }
