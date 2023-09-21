@@ -342,7 +342,7 @@ pub struct MemoryReader {
 }
 
 impl MemoryReader {
-    fn new(memory: Rc<RefCell<Memory>>, address: Address, count: u64) -> Self {
+    pub fn new(memory: Rc<RefCell<Memory>>, address: Address, count: u64) -> Self {
         Self {
             memory,
             address,

@@ -46,7 +46,7 @@ Supported 55 instructions:
 | `Logical`            | `sllv`        | Shift left logical variable.                 |
 | `Comparison`         | `slt`         | Set on less than (signed).                   |
 | `Comparison`         | `slti`        | Set on less than immediate.                  |
-| `Comparison`         | `sltiu`       | Set on less than immediate unsigned.        |
+| `Comparison`         | `sltiu`       | Set on less than immediate unsigned.         |
 | `Comparison`         | `sltu`        | Set on less than unsigned.                   |
 | `Logical`            | `sra`         | Shift right arithmetic.                      |
 | `Logical`            | `srl`         | Shift right logical.                         |

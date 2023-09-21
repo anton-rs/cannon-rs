@@ -36,6 +36,23 @@ pub enum Fd {
     PreimageWrite = 6,
 }
 
+impl TryFrom<u8> for Fd {
+    type Error = anyhow::Error;
+
+    fn try_from(n: u8) -> Result<Self, Self::Error> {
+        match n {
+            0 => Ok(Fd::StdIn),
+            1 => Ok(Fd::Stdout),
+            2 => Ok(Fd::StdErr),
+            3 => Ok(Fd::HintRead),
+            4 => Ok(Fd::HintWrite),
+            5 => Ok(Fd::PreimageRead),
+            6 => Ok(Fd::PreimageWrite),
+            _ => anyhow::bail!("Failed to convert {} to Fd", n),
+        }
+    }
+}
+
 /// A [Syscall] is a system call that can be made within the MIPS emulator.
 pub enum Syscall {
     Mmap = 4090,
@@ -47,17 +64,19 @@ pub enum Syscall {
     Fcntl = 4055,
 }
 
-impl From<u32> for Syscall {
-    fn from(n: u32) -> Self {
+impl TryFrom<u32> for Syscall {
+    type Error = anyhow::Error;
+
+    fn try_from(n: u32) -> Result<Self, Self::Error> {
         match n {
-            4090 => Syscall::Mmap,
-            4045 => Syscall::Brk,
-            4120 => Syscall::Clone,
-            4246 => Syscall::ExitGroup,
-            4003 => Syscall::Read,
-            4004 => Syscall::Write,
-            4055 => Syscall::Fcntl,
-            _ => panic!("Unknown syscall: {}", n),
+            4090 => Ok(Syscall::Mmap),
+            4045 => Ok(Syscall::Brk),
+            4120 => Ok(Syscall::Clone),
+            4246 => Ok(Syscall::ExitGroup),
+            4003 => Ok(Syscall::Read),
+            4004 => Ok(Syscall::Write),
+            4055 => Ok(Syscall::Fcntl),
+            _ => anyhow::bail!("Failed to convert {} to Syscall", n),
         }
     }
 }

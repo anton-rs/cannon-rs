@@ -4,8 +4,8 @@ use crate::{traits::PreimageOracle, Address, State};
 use alloy_primitives::B256;
 use std::io::{BufWriter, Write};
 
-const MIPS_EBADF: u8 = 0x9;
-const MIPS_EINVAL: u8 = 0x16;
+pub(crate) const MIPS_EBADF: u32 = 0x9;
+pub(crate) const MIPS_EINVAL: u32 = 0x16;
 
 pub struct InstrumentedState<W: Write, P: PreimageOracle> {
     /// The inner [State] of the MIPS thread context.

@@ -1,9 +1,18 @@
 //! This module contains the MIPS VM implementation for the [InstrumentedState].
 
-use crate::{Address, InstrumentedState, PreimageOracle};
+use crate::{
+    memory::MemoryReader,
+    mips::instrumented::{MIPS_EBADF, MIPS_EINVAL},
+    page,
+    types::Syscall,
+    Address, Fd, InstrumentedState, PreimageOracle,
+};
 use alloy_primitives::B256;
 use anyhow::Result;
-use std::io::{Cursor, Read, Write};
+use std::{
+    io::{Cursor, Read, Write},
+    rc::Rc,
+};
 
 impl<W, P> InstrumentedState<W, P>
 where
@@ -56,7 +65,11 @@ where
             }
 
             self.last_mem_access = effective_address;
-            self.mem_proof = self.state.memory.merkle_proof(effective_address)?;
+            self.mem_proof = self
+                .state
+                .memory
+                .borrow_mut()
+                .merkle_proof(effective_address)?;
         }
         Ok(())
     }
@@ -66,7 +79,145 @@ where
     /// ### Returns
     /// - A [Result] indicating if the syscall dispatch was successful.
     pub fn handle_syscall(&mut self) -> Result<()> {
-        todo!()
+        let mut v0 = 0;
+        let mut v1 = 0;
+
+        let (a0, a1, a2) = (
+            self.state.registers[4],
+            self.state.registers[5],
+            self.state.registers[6],
+        );
+
+        if let Ok(syscall) = Syscall::try_from(self.state.registers[2]) {
+            match syscall {
+                Syscall::Mmap => {
+                    let mut sz = a1;
+
+                    // Adjust the size to align with the page size if the size
+                    // cannot fit within the page address mask.
+                    let masked_size = sz & page::PAGE_ADDRESS_MASK as u32;
+                    if masked_size != 0 {
+                        sz += page::PAGE_SIZE as u32 - masked_size;
+                    }
+
+                    if a0 == 0 {
+                        v0 = self.state.heap;
+                        self.state.heap += sz;
+                    } else {
+                        v0 = a0;
+                    }
+                }
+                Syscall::Brk => {
+                    v0 = 0x40000000;
+                }
+                Syscall::Clone => {
+                    // Clone is not supported, set the virtual register to 1.
+                    v0 = 1;
+                }
+                Syscall::ExitGroup => {
+                    self.state.exited = true;
+                    self.state.exit_code = a0 as u8;
+                    return Ok(());
+                }
+                Syscall::Read => match (a0 as u8).try_into() {
+                    Ok(Fd::StdIn) => {
+                        // Nothing to do; Leave v0 and v1 zero, read nothing, and give no error.
+                    }
+                    Ok(Fd::PreimageRead) => {
+                        let effective_address = (a1 & 0xFFFFFFFC) as Address;
+
+                        self.track_mem_access(effective_address)?;
+                        let memory = self
+                            .state
+                            .memory
+                            .borrow_mut()
+                            .get_memory(effective_address)?;
+
+                        let (data, mut data_len) = self
+                            .read_preimage(self.state.preimage_key, self.state.preimage_offset)?;
+
+                        let alignment = (a1 & 0x3) as usize;
+                        let space = 4 - alignment;
+                        if space < data_len {
+                            data_len = space;
+                        }
+                        if (a2 as usize) < data_len {
+                            data_len = a2 as usize;
+                        }
+
+                        let mut out_mem = memory.to_be_bytes();
+                        out_mem[alignment..alignment + data_len].copy_from_slice(&data[..data_len]);
+                        self.state
+                            .memory
+                            .borrow_mut()
+                            .set_memory(effective_address, u32::from_be_bytes(out_mem))?;
+                        self.state.preimage_offset += data_len as u32;
+                        v0 = data_len as u32;
+                    }
+                    Ok(Fd::HintRead) => {
+                        // Don't actually read anything into memory, just say we read it. The
+                        // result is ignored anyways.
+                        v0 = a2;
+                    }
+                    _ => {
+                        v0 = 0xFFFFFFFF;
+                        v1 = MIPS_EBADF;
+                    }
+                },
+                Syscall::Write => match (a0 as u8).try_into() {
+                    Ok(Fd::Stdout) => {
+                        let _reader = MemoryReader::new(
+                            Rc::clone(&self.state.memory),
+                            a1 as Address,
+                            a2 as u64,
+                        );
+                        todo!()
+                    }
+                    Ok(Fd::StdErr) => {
+                        let _reader = MemoryReader::new(
+                            Rc::clone(&self.state.memory),
+                            a1 as Address,
+                            a2 as u64,
+                        );
+                        todo!()
+                    }
+                    Ok(Fd::HintWrite) => {}
+                    Ok(Fd::PreimageWrite) => {}
+                    _ => {
+                        v0 = 0xFFFFFFFF;
+                        v1 = MIPS_EBADF;
+                    }
+                },
+                Syscall::Fcntl => {
+                    if a1 == 3 {
+                        match (a0 as u8).try_into() {
+                            Ok(Fd::StdIn | Fd::PreimageRead | Fd::HintRead) => {
+                                v0 = 0; // O_RDONLY
+                            }
+                            Ok(Fd::Stdout | Fd::StdErr | Fd::PreimageWrite | Fd::HintWrite) => {
+                                v0 = 1; // O_WRONLY
+                            }
+                            _ => {
+                                v0 = 0xFFFFFFFF;
+                                v1 = MIPS_EBADF;
+                            }
+                        }
+                    } else {
+                        // The command is not recognized by this kernel.
+                        v0 = 0xFFFFFFFF;
+                        v1 = MIPS_EINVAL;
+                    }
+                }
+            }
+        }
+
+        self.state.registers[2] = v0;
+        self.state.registers[7] = v1;
+
+        self.state.pc = self.state.next_pc;
+        self.state.next_pc += 4;
+
+        Ok(())
     }
 }
 

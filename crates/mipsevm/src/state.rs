@@ -1,5 +1,7 @@
 //! This module contains the data structure for the state of the MIPS emulator.
 
+use std::{cell::RefCell, rc::Rc};
+
 use crate::{witness::STATE_WITNESS_SIZE, Memory, StateWitness, VMStatus};
 use alloy_primitives::B256;
 use anyhow::Result;
@@ -7,11 +9,11 @@ use anyhow::Result;
 #[derive(Debug, Default)]
 pub struct State {
     /// The [Memory] of the emulated MIPS thread context.
-    pub memory: Memory,
+    pub memory: Rc<RefCell<Memory>>,
     /// The preimage key for the given state.
     pub preimage_key: B256,
-    /// The preimage value for the given state.
-    pub preimage_value: u32,
+    /// The preimage offset.
+    pub preimage_offset: u32,
     /// The current program counter.
     pub pc: u32,
     /// The next program counter.
@@ -33,9 +35,9 @@ impl State {
     /// - A [Result] containing the encoded [StateWitness] or an error if the encoding failed.
     pub fn encode_witness(&mut self) -> Result<StateWitness> {
         let mut witness: StateWitness = [0u8; STATE_WITNESS_SIZE];
-        witness[..32].copy_from_slice(self.memory.merkle_root()?.as_slice());
+        witness[..32].copy_from_slice(self.memory.borrow_mut().merkle_root()?.as_slice());
         witness[32..64].copy_from_slice(self.preimage_key.as_slice());
-        witness[64..68].copy_from_slice(&self.preimage_value.to_be_bytes());
+        witness[64..68].copy_from_slice(&self.preimage_offset.to_be_bytes());
         witness[68..72].copy_from_slice(&self.pc.to_be_bytes());
         witness[72..76].copy_from_slice(&self.next_pc.to_be_bytes());
         witness[76..80].copy_from_slice(&self.lo.to_be_bytes());
