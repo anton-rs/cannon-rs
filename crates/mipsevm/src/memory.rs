@@ -3,20 +3,12 @@
 use crate::{
     page::{self, CachedPage},
     utils::keccak_concat_fixed,
+    Address, Gindex, PageIndex,
 };
 use alloy_primitives::B256;
 use anyhow::Result;
 use fnv::FnvHashMap;
 use std::{cell::RefCell, io::Read, rc::Rc};
-
-/// A [PageIndex] is
-pub type PageIndex = u64;
-
-/// A [Gindex] is a generalized index, defined as $2^{\text{depth}} + \text{index}$.
-pub type Gindex = u64;
-
-/// An [Address] is a 64 bit address in the MIPS emulator's memory.
-pub type Address = u64;
 
 /// The [Memory] struct represents the MIPS emulator's memory.
 #[derive(Debug)]
@@ -138,7 +130,7 @@ impl Memory {
                 |page| {
                     let page_g_index =
                         (1 << depth_into_page) | (g_index & ((1 << depth_into_page) - 1));
-                    page.borrow_mut().merkleize_subtree(page_g_index as usize)
+                    page.borrow_mut().merkleize_subtree(page_g_index)
                 },
             );
         }
@@ -375,6 +367,8 @@ impl Read for MemoryReader {
             end = end_address as usize & page::PAGE_ADDRESS_MASK;
         }
         let n = end - start;
+        // TODO(clabby): To support reading the full stream, we should use something
+        // less precise than `copy_from_slice`.
         match self.memory.borrow_mut().page_lookup(page_index) {
             Some(page) => {
                 buf.copy_from_slice(&page.borrow().data[start..end]);

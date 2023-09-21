@@ -3,10 +3,10 @@
 #![allow(incomplete_features, dead_code)]
 
 mod memory;
-pub use self::memory::{Address, Gindex, Memory, PageIndex};
+pub use self::memory::Memory;
 
 mod page;
-pub use self::page::{CachedPage, Page};
+pub use self::page::CachedPage;
 
 mod state;
 pub use self::state::State;
@@ -15,8 +15,10 @@ mod traits;
 pub use self::traits::StateWitnessHasher;
 
 mod witness;
-pub use self::witness::StateWitness;
 
 mod utils;
+
+mod types;
+pub use types::{Address, Fd, Gindex, Page, PageIndex, StateWitness, VMStatus};
 
 mod mips;

@@ -1,6 +1,6 @@
 //! This module contains the data structure for the state of the MIPS emulator.
 
-use crate::{witness::STATE_WITNESS_SIZE, Memory, StateWitness};
+use crate::{witness::STATE_WITNESS_SIZE, Memory, StateWitness, VMStatus};
 use alloy_primitives::{Bytes, B256};
 use anyhow::Result;
 
@@ -63,12 +63,4 @@ impl State {
             _ => VMStatus::Panic,
         }
     }
-}
-
-#[repr(u8)]
-pub enum VMStatus {
-    Valid = 0,
-    Invalid = 1,
-    Panic = 2,
-    Unfinished = 3,
 }

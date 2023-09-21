@@ -1,11 +1,10 @@
 //! This module contains the various witness types.
 
-use crate::{State, StateWitnessHasher};
+use crate::{State, StateWitness, StateWitnessHasher};
 use alloy_primitives::{keccak256, B256};
 
+/// The size of an encoded [StateWitness] in bytes.
 pub(crate) const STATE_WITNESS_SIZE: usize = 226;
-
-pub type StateWitness = [u8; STATE_WITNESS_SIZE];
 
 impl StateWitnessHasher for StateWitness {
     fn state_hash(&self) -> B256 {

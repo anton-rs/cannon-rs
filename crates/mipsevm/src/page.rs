@@ -1,6 +1,6 @@
 //! This module contains the data structure for a [Page] within the MIPS emulator's [Memory].
 
-use crate::utils::keccak_concat_fixed;
+use crate::{utils::keccak_concat_fixed, Address, Gindex, Page};
 use alloy_primitives::{keccak256, B256};
 use anyhow::Result;
 use once_cell::sync::Lazy;
@@ -21,9 +21,6 @@ pub(crate) static ZERO_HASHES: Lazy<[B256; 256]> = Lazy::new(|| {
     }
     out
 });
-
-/// A [Page] is a portion of memory of size [PAGE_SIZE].
-pub type Page = [u8; PAGE_SIZE];
 
 /// A [CachedPage] is a [Page] with an in-memory cache of intermediate nodes.
 #[derive(Debug, Clone, Copy)]
@@ -46,14 +43,14 @@ impl Default for CachedPage {
 }
 
 impl CachedPage {
-    /// Invalidate a given page address.
+    /// Invalidate a given address within the [Page].
     ///
     /// ### Takes
-    /// - `page_addr`: The page address to invalidate.
+    /// - `page_addr`: The [Address] to invalidate within the [Page].
     ///
     /// ### Returns
     /// - A [Result] indicating if the operation was successful.
-    pub fn invalidate(&mut self, page_addr: u64) -> Result<()> {
+    pub fn invalidate(&mut self, page_addr: Address) -> Result<()> {
         if page_addr >= PAGE_SIZE as u64 {
             anyhow::bail!("Invalid page address: {}", page_addr);
         }
@@ -106,22 +103,21 @@ impl CachedPage {
         self.cache[1].into()
     }
 
-    pub fn merkleize_subtree(&mut self, g_index: usize) -> Result<B256> {
+    pub fn merkleize_subtree(&mut self, g_index: Gindex) -> Result<B256> {
         // Fill the cache by computing the merkle root.
         let _ = self.merkle_root();
 
-        if g_index >= PAGE_SIZE_WORDS {
-            if g_index >= PAGE_SIZE_WORDS * 2 {
+        if g_index >= PAGE_SIZE_WORDS as u64 {
+            if g_index >= (PAGE_SIZE_WORDS * 2) as u64 {
                 anyhow::bail!("Generalized index is too deep: {}", g_index);
             }
 
-            let node_index = g_index & (PAGE_ADDRESS_MASK >> 5);
-            return Ok(B256::from_slice(
-                &self.data[node_index << 5..(node_index << 5) + 32],
-            ));
+            let node_index = g_index as usize & (PAGE_ADDRESS_MASK >> 5);
+            let start = node_index << 5;
+            return Ok(B256::from_slice(&self.data[start..start + 32]));
         }
 
-        Ok(self.cache[g_index].into())
+        Ok(self.cache[g_index as usize].into())
     }
 
     /// Check if a key is valid within the bitmap.

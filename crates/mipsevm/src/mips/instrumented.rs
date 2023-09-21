@@ -4,17 +4,6 @@ use crate::{traits::PreimageOracle, State};
 use alloy_primitives::{Bytes, B256};
 use std::io::{BufWriter, Write};
 
-#[repr(u8)]
-enum Fd {
-    StdIn = 0,
-    Stdout = 1,
-    StdErr = 2,
-    HintRead = 3,
-    HintWrite = 4,
-    PreimageRead = 5,
-    PreimageWrite = 6,
-}
-
 const MIPS_EBADF: u8 = 0x9;
 const MIPS_EINVAL: u8 = 0x16;
 

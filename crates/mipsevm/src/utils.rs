@@ -1,4 +1,4 @@
-//! Contains utility and helper functions for the emulator.
+//! This module contains utility and helper functions for this crate.
 
 use alloy_primitives::{keccak256, B256};
 
@@ -16,6 +16,7 @@ where
 }
 
 /// Hash the concatenation of two fixed sized arrays.
+#[inline(always)]
 pub(crate) fn keccak_concat_fixed<T, const N: usize, const M: usize>(a: [T; N], b: [T; M]) -> B256
 where
     T: Copy + Default,
