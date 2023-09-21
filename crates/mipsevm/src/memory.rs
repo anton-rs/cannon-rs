@@ -50,9 +50,9 @@ impl Memory {
     /// ### Takes
     /// - `f`: A function that takes a [PageIndex] and a shared reference to a [CachedPage].
     pub fn for_each_page(&mut self, mut f: impl FnMut(PageIndex, Rc<RefCell<CachedPage>>)) {
-        for (key, page) in self.pages.iter() {
+        self.pages.iter().for_each(|(key, page)| {
             f(*key, Rc::clone(page));
-        }
+        });
     }
 
     /// Invalidate a given memory address
@@ -68,19 +68,23 @@ impl Memory {
         }
 
         // Find the page and invalidate the address within it.
-        if let Some(page) = self.page_lookup(address >> page::PAGE_ADDRESS_SIZE) {
-            let mut page = page.borrow_mut();
-            page.invalidate(address & page::PAGE_ADDRESS_MASK as u64)?;
-            if !page.is_valid(1) {
+        match self.page_lookup(address >> page::PAGE_ADDRESS_SIZE) {
+            Some(page) => {
+                let mut page = page.borrow_mut();
+                page.invalidate(address & page::PAGE_ADDRESS_MASK as u64)?;
+                if !page.is_valid(1) {
+                    return Ok(());
+                }
+            }
+            None => {
+                // Nothing to invalidate
                 return Ok(());
             }
-        } else {
-            // Nothing to invalidate
-            return Ok(());
         }
 
         // Find the generalized index of the first page covering the address
         let mut g_index = ((1u64 << 32) | address) >> page::PAGE_ADDRESS_SIZE as u64;
+        // Invalidate all nodes in the branch
         while g_index > 0 {
             self.nodes.insert(g_index, None);
             g_index >>= 1;
@@ -234,7 +238,7 @@ impl Memory {
         }
 
         let page_index = address >> page::PAGE_ADDRESS_SIZE as u64;
-        let page_offset = address as usize & page::PAGE_ADDRESS_MASK;
+        let page_address = address as usize & page::PAGE_ADDRESS_MASK;
 
         // Attempt to look up the page.
         // - If it does exist, invalidate it before changing it.
@@ -249,7 +253,8 @@ impl Memory {
             .unwrap_or_else(|| self.alloc_page(page_index))?;
 
         // Copy the 32 bit value into the page
-        page.borrow_mut().data[page_offset..page_offset + 4].copy_from_slice(&value.to_be_bytes());
+        page.borrow_mut().data[page_address..page_address + 4]
+            .copy_from_slice(&value.to_be_bytes());
 
         Ok(())
     }
@@ -267,13 +272,14 @@ impl Memory {
             anyhow::bail!("Unaligned memory access: {:x}", address);
         }
 
-        if let Some(page) = self.page_lookup(address >> page::PAGE_ADDRESS_SIZE as u64) {
-            let page_address = address as usize & page::PAGE_ADDRESS_MASK;
-            Ok(u32::from_be_bytes(
-                page.borrow().data[page_address..page_address + 4].try_into()?,
-            ))
-        } else {
-            Ok(0)
+        match self.page_lookup(address >> page::PAGE_ADDRESS_SIZE as u64) {
+            Some(page) => {
+                let page_address = address as usize & page::PAGE_ADDRESS_MASK;
+                Ok(u32::from_be_bytes(
+                    page.borrow().data[page_address..page_address + 4].try_into()?,
+                ))
+            }
+            None => Ok(0),
         }
     }
 
