@@ -275,7 +275,7 @@ where
             self.state.next_pc = prev_pc + 4 + (sign_extend(instruction & 0xFFFF, 16) << 2);
         } else {
             // Branch not taken; proceed as normal.
-            self.state.next_pc = self.state.next_pc + 4;
+            self.state.next_pc += 4;
         }
 
         Ok(())
@@ -348,6 +348,217 @@ where
         self.state.next_pc += 4;
 
         Ok(())
+    }
+
+    /// Handles a jump within the MIPS thread context emulation.
+    ///
+    /// ### Takes
+    /// - `link_reg`: The register index of the link register.
+    /// - `dest`: The destination address of the jump.
+    ///
+    /// ### Returns
+    /// - A [Result] indicating if the branch dispatch was successful.
+    pub fn handle_jump(&mut self, link_reg: u32, dest: u32) -> Result<()> {
+        if self.state.next_pc != self.state.pc + 4 {
+            anyhow::bail!("Unexpected jump in delay slot at {:x}", self.state.pc);
+        }
+
+        let prev_pc = self.state.pc;
+        self.state.pc = self.state.next_pc;
+        self.state.next_pc = dest;
+        if link_reg != 0 {
+            self.state.registers[link_reg as usize] = prev_pc + 8;
+        }
+        Ok(())
+    }
+
+    /// Handles a register destination instruction within the MIPS thread context emulation.
+    ///
+    /// ### Takes
+    /// - `store_reg`: The register index of the register to store the result in.
+    /// - `val`: The value to store in the register.
+    /// - `conditional`: Whether or not the register should be updated.
+    ///
+    /// ### Returns
+    /// - A [Result] indicating if the branch dispatch was successful.
+    pub fn handle_rd(&mut self, store_reg: u32, val: u32, conditional: bool) -> Result<()> {
+        if store_reg >= 32 {
+            anyhow::bail!("Invalid register index {}", store_reg);
+        }
+
+        if store_reg != 0 && conditional {
+            self.state.registers[store_reg as usize] = val;
+        }
+
+        self.state.pc = self.state.next_pc;
+        self.state.next_pc += 4;
+        Ok(())
+    }
+
+    /// Handles the execution of a MIPS instruction in the MIPS thread context emulation.
+    ///
+    /// ### Takes
+    /// - `instruction`: The instruction to execute.
+    /// - `rs`: The register index of the source register.
+    /// - `rt`: The register index of the target register.
+    /// - `mem`: The memory that the instruction is operating on.
+    ///
+    /// ### Returns
+    /// - `Ok(n)` - The result of the instruction execution.
+    /// - `Err(_)`: An error occurred while executing the instruction.
+    pub fn execute(&mut self, instruction: u32, rs: u32, rt: u32, mem: u32) -> Result<u32> {
+        // Opcodes in MIPS are 6 bits in size, and stored in the high-order bits of the big-endian
+        // instruction.
+        let opcode = instruction >> 26;
+
+        if opcode == 0 || (8..0xF).contains(&opcode) {
+            let fun = match opcode {
+                // addi
+                8 => 0x20,
+                // addiu
+                9 => 0x21,
+                // slti
+                0xA => 0x2A,
+                // sltiu
+                0xB => 0x2B,
+                // andi
+                0xC => 0x24,
+                // ori
+                0xD => 0x25,
+                // xori
+                0xE => 0x26,
+                _ => instruction & 0x3F,
+            };
+
+            match fun {
+                // sll
+                0 => Ok(rt << (instruction >> 6) & 0x1F),
+                // srl
+                2 => Ok(rt >> (instruction >> 6) & 0x1F),
+                // sra
+                3 => {
+                    let shamt = (instruction >> 6) & 0x1F;
+                    Ok(sign_extend(rt >> shamt, 32 - shamt))
+                }
+                // sslv
+                4 => Ok(rt << (rs & 0x1F)),
+                // srlv
+                6 => Ok(rt >> (rs & 0x1F)),
+                7 => Ok(sign_extend(rt >> rs, 32 - rs)),
+
+                // Functions in range [0x8, 0x1b] are handled specially by other functions.
+
+                // jr, jalr, movz, movn, syscall, sync, mfhi, mthi, mflo, mftlo, mult, multu, div,
+                // divu
+                (8..=0x0c) | (0x0f..=0x13) | (0x18..=0x1b) => Ok(rs),
+
+                // The rest are transformed R-type arithmetic imm instructions.
+
+                // add / addu
+                0x20 | 0x21 => Ok(rs + rt),
+                // sub / subu
+                0x22 | 0x23 => Ok(rs - rt),
+                // and
+                0x24 => Ok(rs & rt),
+                // or
+                0x25 => Ok(rs | rt),
+                // xor
+                0x26 => Ok(rs ^ rt),
+                // nor
+                0x27 => Ok(!(rs | rt)),
+                // slti
+                0x2a => Ok(((rs as i32) < (rt as i32)) as u32),
+                // sltiu
+                0x2b => Ok((rs < rt) as u32),
+                _ => anyhow::bail!("Invalid function code {:x}", fun),
+            }
+        } else {
+            match opcode {
+                // SPECIAL2
+                0x1C => {
+                    let fun = instruction & 0x3F;
+                    match fun {
+                        // mul
+                        0x02 => Ok(((rs as i32) * (rt as i32)) as u32),
+                        // clo
+                        0x20 | 0x21 => {
+                            let mut rs = rs;
+                            if fun == 0x20 {
+                                rs = !rs;
+                            }
+                            let mut i = 0u32;
+                            while rs & 0x80000000 != 0 {
+                                rs <<= 1;
+                                i += 1;
+                            }
+                            Ok(i)
+                        }
+                        _ => anyhow::bail!("Invalid function code {:x}", fun),
+                    }
+                }
+                // lui
+                0x0F => Ok(rt << 16),
+                // lb
+                0x20 => Ok(sign_extend((mem >> (24 - ((rs & 0x3) << 3))) & 0xFF, 8)),
+                // lh
+                0x21 => Ok(sign_extend((mem >> (16 - ((rs & 0x2) << 3))) & 0xFFFF, 16)),
+                // lwl
+                0x22 => {
+                    let sl = (rs & 0x3) << 3;
+                    let val = mem << sl;
+                    let mask = 0xFFFFFFFF << sl;
+                    Ok((rt & !mask) | val)
+                }
+                // lw
+                0x23 => Ok(mem),
+                // lbu
+                0x24 => Ok((mem >> (24 - ((rs & 0x3) << 3))) & 0xFF),
+                // lhu
+                0x25 => Ok((mem >> (16 - ((rs & 0x2) << 3))) & 0xFFFF),
+                // lwr
+                0x26 => {
+                    let sr = 24 - ((rs & 0x3) << 3);
+                    let val = mem >> sr;
+                    let mask = 0xFFFFFFFFu32 >> sr;
+                    Ok((rt & !mask) | val)
+                }
+                // sb
+                0x28 => {
+                    let sl = 24 - ((rs & 0x3) << 3);
+                    let val = (rt & 0xFF) << sl;
+                    let mask = 0xFFFFFFFF ^ (0xFF << sl);
+                    Ok((mem & mask) | val)
+                }
+                // sh
+                0x29 => {
+                    let sl = 16 - ((rs & 0x2) << 3);
+                    let val = (rt & 0xFFFF) << sl;
+                    let mask = 0xFFFFFFFF ^ (0xFFFF << sl);
+                    Ok((mem & mask) | val)
+                }
+                // swl
+                0x2a => {
+                    let sr = (rs & 0x3) << 3;
+                    let val = rt >> sr;
+                    let mask = 0xFFFFFFFFu32 >> sr;
+                    Ok((mem & !mask) | val)
+                }
+                // sw
+                0x2b => Ok(rt),
+                // swr
+                0x2e => {
+                    let sl = 24 - ((rs & 0x3) << 3);
+                    let val = rt << sl;
+                    let mask = 0xFFFFFFFF << sl;
+                    Ok((mem & !mask) | val)
+                }
+                // ll
+                0x30 => Ok(mem),
+                // sc
+                0x38 => Ok(rt),
+                _ => anyhow::bail!("Invalid opcode {:x}", opcode),
+            }
+        }
     }
 }
 
