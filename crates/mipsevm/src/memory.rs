@@ -19,6 +19,7 @@ pub type Gindex = u64;
 pub type Address = u64;
 
 /// The [Memory] struct represents the MIPS emulator's memory.
+#[derive(Debug)]
 pub struct Memory {
     /// Map of generalized index -> the merkle root of each index. None if invalidated.
     nodes: FnvHashMap<Gindex, Option<B256>>,
@@ -376,12 +377,10 @@ impl Read for MemoryReader {
         let n = end - start;
         match self.memory.borrow_mut().page_lookup(page_index) {
             Some(page) => {
-                buf.copy_from_slice(&page.borrow().data[start..end as usize]);
+                buf.copy_from_slice(&page.borrow().data[start..end]);
             }
             None => {
-                let mut z = Vec::with_capacity(n);
-                z.resize(n, 0);
-                buf.copy_from_slice(z.as_slice());
+                buf.copy_from_slice(vec![0; n].as_slice());
             }
         };
         self.address += n as u64;
