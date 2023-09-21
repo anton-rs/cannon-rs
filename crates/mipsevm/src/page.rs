@@ -1,5 +1,4 @@
-//! This module contains the data structure for a [Page] within the
-//! MIPS emulator's memory.
+//! This module contains the data structure for a [Page] within the MIPS emulator's [Memory].
 
 use crate::utils::concat_fixed;
 use alloy_primitives::{keccak256, B256};
@@ -47,27 +46,33 @@ impl Default for CachedPage {
 }
 
 impl CachedPage {
+    /// Invalidate a given page address.
+    ///
+    /// ### Takes
+    /// - `page_addr`: The page address to invalidate.
+    ///
+    /// ### Returns
+    /// - A [Result] indicating if the operation was successful.
     pub fn invalidate(&mut self, page_addr: u64) -> Result<()> {
         if page_addr >= PAGE_SIZE as u64 {
             anyhow::bail!("Invalid page address: {}", page_addr);
         }
 
         // The first cache layer caches nodes that have two 32 byte leaf nodes.
-        let mut key = ((1 << PAGE_ADDRESS_SIZE) | page_addr) >> 6;
+        let key = ((1 << PAGE_ADDRESS_SIZE) | page_addr) >> 6;
 
-        // SAFETY: mempirate no looping, me clock cycles
-        // unsafe {
-        //     let len = (31 - key.leading_zeros()) + 1;
-        //     std::ptr::write_bytes(&mut self.valid[key as usize] as *mut bool, 0, len as usize);
-        // }
-        while key > 0 {
-            self.set_valid(key as usize, false);
-            key >>= 1;
-        }
+        // Create a mask where all bits from position `127 - key` and above are set
+        let mask: u128 = !((1 << (127 - key)) - 1);
+
+        // Apply the mask to the valid bitmap
+        self.valid &= !mask;
 
         Ok(())
     }
 
+    /// Invalidate the entire [Page].
+    ///
+    /// This is equivalent to calling `invalidate` on every address in the page.
     pub fn invalidate_full(&mut self) {
         self.valid = 0;
     }
