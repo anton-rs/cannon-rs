@@ -219,6 +219,67 @@ where
 
         Ok(())
     }
+
+    /// Handles a branch within the MIPS thread context emulation.
+    ///
+    /// ### Takes
+    /// - `opcode`: The opcode of the branch instruction.
+    /// - `instruction`: The instruction being executed.
+    /// - `rt_reg`: The register index of the target register.
+    /// - `rs`: The register index of the source register.
+    ///
+    /// ### Returns
+    /// - A [Result] indicating if the branch dispatch was successful.
+    pub fn handle_branch(
+        &mut self,
+        opcode: u32,
+        instruction: u32,
+        rt_reg: u32,
+        rs: u32,
+    ) -> Result<()> {
+        if self.state.next_pc != self.state.pc + 4 {
+            anyhow::bail!("Unexpected branch in delay slot at {:x}", self.state.pc,);
+        }
+
+        let should_branch = match opcode {
+            // beq / bne
+            4 | 5 => {
+                let rt = self.state.registers[rt_reg as usize];
+                (rs == rt && opcode == 4) || (rs != rt && opcode == 5)
+            }
+            // blez
+            6 => (rs as i32) <= 0,
+            // bgtz
+            7 => (rs as i32) > 0,
+            1 => {
+                // regimm
+                let rtv = (instruction >> 16) & 0x1F;
+
+                if rtv == 0 {
+                    // bltz
+                    (rs as i32) < 0
+                } else if rtv == 1 {
+                    // bgez
+                    (rs as i32) >= 0
+                } else {
+                    false
+                }
+            }
+            _ => false,
+        };
+
+        let prev_pc = self.state.pc;
+        self.state.pc = self.state.next_pc;
+
+        if should_branch {
+            self.state.next_pc = prev_pc + 4 + (sign_extend(instruction & 0xFFFF, 16) << 2);
+        } else {
+            // Branch not taken; proceed as normal.
+            self.state.next_pc = self.state.next_pc + 4;
+        }
+
+        Ok(())
+    }
 }
 
 /// Perform a sign extension of a value embedded in the lower bits of `data` up to
