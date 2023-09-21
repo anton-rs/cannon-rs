@@ -74,6 +74,138 @@ where
         Ok(())
     }
 
+    /// Performs a single step of the MIPS thread context emulation.
+    ///
+    /// ### Returns
+    /// - A [Result] indicating if the step was successful.
+    pub fn step(&mut self) -> Result<()> {
+        if self.state.exited {
+            return Ok(());
+        }
+
+        self.state.step += 1;
+
+        // Fetch the instruction
+        let instruction = self
+            .state
+            .memory
+            .borrow_mut()
+            .get_memory(self.state.pc as Address)?;
+        let opcode = instruction >> 26;
+
+        // j-type j/jal
+        if (2..=3).contains(&opcode) {
+            let link_reg = if opcode == 3 { 31 } else { 0 };
+            // Take the top 4 bits of the next PC (its 256MB region), and concatenate with the
+            // 26-bit offset
+            let target = self.state.next_pc & 0xF0000000 | ((instruction & 0x03FFFFFF) << 2);
+            return self.handle_jump(link_reg, target);
+        }
+
+        // Register fetch
+        let mut rs = self.state.registers[((instruction >> 21) & 0x1F) as usize]; // source register 1 value
+        let mut rt = 0; // source register 2 / temp value
+        let rt_reg = (instruction >> 16) & 0x1F;
+
+        // R-type or I-type (stores rt)
+        let mut rd_reg = rt_reg;
+        if [0, 0x1c].contains(&opcode) {
+            // R-type (stores rd)
+            rt = self.state.registers[rt_reg as usize];
+            rd_reg = (instruction >> 11) & 0x1F;
+        } else if opcode < 20 {
+            // rt is SignExtImm
+            // Don't sign extend for andi, ori, xori
+            if (0x0c..=0x0e).contains(&opcode) {
+                // ZeroExtImm
+                rt = instruction & 0xFFFF;
+            } else {
+                // SignExtImm
+                rt = sign_extend(instruction & 0xFFFF, 16);
+            }
+        } else if opcode >= 0x28 || [0x22, 0x26].contains(&opcode) {
+            // Store rt value with store
+            rt = self.state.registers[rt_reg as usize];
+
+            // Store actual rt with lwl and lwr
+            rd_reg = rt_reg;
+        }
+
+        if (4..8).contains(&opcode) || opcode == 1 {
+            return self.handle_branch(opcode, instruction, rt_reg, rs);
+        }
+
+        let mut store_address: u32 = 0xFFFFFFFF;
+        let mut mem = 0;
+        // Memory fetch (all I-type)
+        // We also do the load for stores
+        if opcode >= 0x20 {
+            // M[R[rs]+SignExtImm]
+            rs += sign_extend(instruction & 0xFFFF, 16);
+            let address = rs & 0xFFFFFFFC;
+            self.track_mem_access(address as Address)?;
+
+            mem = self
+                .state
+                .memory
+                .borrow_mut()
+                .get_memory(address as Address)?;
+            if opcode >= 0x28 && opcode != 0x30 {
+                // Store
+                store_address = address;
+                // Store opcodes don't write back to a register
+                rd_reg = 0;
+            }
+        }
+
+        // ALU
+        let val = self.execute(instruction, rs, rt, mem)?;
+
+        let fun = instruction & 0x3F;
+        if opcode == 0 && (8..0x1c).contains(&fun) {
+            match fun {
+                (8..=9) => {
+                    let link_reg = if fun == 9 { rd_reg } else { 0 };
+                    return self.handle_jump(link_reg, rs);
+                }
+                0x0A => {
+                    // movz
+                    return self.handle_rd(rd_reg, val, rt == 0);
+                }
+                0x0B => {
+                    // movn
+                    return self.handle_rd(rd_reg, val, rt != 0);
+                }
+                0x0C => {
+                    // syscall (can read and write)
+                    return self.handle_syscall();
+                }
+                (0x10..=0x1b) => {
+                    // lo and hi registers
+                    // Can write back
+                    return self.handle_hi_lo(fun, rs, rt, rd_reg);
+                }
+                _ => {}
+            }
+        }
+
+        if opcode == 0x38 && rt_reg != 0 {
+            self.state.registers[rt_reg as usize] = 1;
+        }
+
+        // Write memory
+        if store_address != 0xFFFFFFFF {
+            self.track_mem_access(store_address as Address)?;
+            self.state
+                .memory
+                .borrow_mut()
+                .set_memory(store_address as Address, val)?;
+        }
+
+        // Write back the value to the destination register
+        self.handle_rd(rd_reg, val, true)
+    }
+
     /// Handles a syscall within the MIPS thread context emulation.
     ///
     /// ### Returns
@@ -544,6 +676,8 @@ where
                                 rs = !rs;
                             }
                             let mut i = 0u32;
+
+                            // TODO(clabby): Remove loop, do some good ol' bit twiddling instead.
                             while rs & 0x80000000 != 0 {
                                 rs <<= 1;
                                 i += 1;
