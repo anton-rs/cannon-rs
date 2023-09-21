@@ -35,3 +35,29 @@ pub enum Fd {
     PreimageRead = 5,
     PreimageWrite = 6,
 }
+
+/// A [Syscall] is a system call that can be made within the MIPS emulator.
+pub enum Syscall {
+    Mmap = 4090,
+    Brk = 4045,
+    Clone = 4120,
+    ExitGroup = 4246,
+    Read = 4003,
+    Write = 4004,
+    Fcntl = 4055,
+}
+
+impl From<u32> for Syscall {
+    fn from(n: u32) -> Self {
+        match n {
+            4090 => Syscall::Mmap,
+            4045 => Syscall::Brk,
+            4120 => Syscall::Clone,
+            4246 => Syscall::ExitGroup,
+            4003 => Syscall::Read,
+            4004 => Syscall::Write,
+            4055 => Syscall::Fcntl,
+            _ => panic!("Unknown syscall: {}", n),
+        }
+    }
+}

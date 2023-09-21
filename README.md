@@ -11,6 +11,11 @@
 * ...running compiled Go code
 * ...that runs an EVM
 
+## Credits
+
+This repository is heavily inspired by the original [Cannon][cannon], built by [George Hotz][geohot] and members of the [OP Labs][op-labs] team. The original implementation is written in Go, and can be found [in the Optimism monorepo][cannon]. All
+credits for the original idea and reference implementation of this concept go to these fine folks.
+
 ## Usage
 
 *todo*
@@ -27,4 +32,6 @@
 
 *todo*
 
+[geohot]: https://github.com/geohot
+[op-labs]: https://oplabs.co
 [cannon]: https://github.com/ethereum-optimism/optimism/tree/develop/cannon
