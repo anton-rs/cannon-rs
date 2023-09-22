@@ -352,7 +352,7 @@ impl MemoryReader {
 }
 
 impl Read for MemoryReader {
-    fn read(&mut self, buf: &mut [u8]) -> Result<usize, std::io::Error> {
+    fn read(&mut self, mut buf: &mut [u8]) -> Result<usize, std::io::Error> {
         if self.count == 0 {
             return Ok(0);
         }
@@ -371,10 +371,10 @@ impl Read for MemoryReader {
         // less precise than `copy_from_slice`.
         match self.memory.borrow_mut().page_lookup(page_index) {
             Some(page) => {
-                buf.copy_from_slice(&page.borrow().data[start..end]);
+                std::io::copy(&mut page.borrow().data[start..end].as_ref(), &mut buf)?;
             }
             None => {
-                buf.copy_from_slice(vec![0; n].as_slice());
+                std::io::copy(&mut vec![0; n].as_slice(), &mut buf)?;
             }
         };
         self.address += n as u64;
@@ -580,8 +580,7 @@ mod test {
             let mut reader =
                 MemoryReader::new(Rc::clone(&memory), 0x1337 - 10, data.len() as u64 + 20);
             let mut buf = Vec::with_capacity(1260);
-            buf.resize(1260, 0);
-            reader.read(&mut buf).unwrap();
+            reader.read_to_end(&mut buf).unwrap();
 
             assert_eq!([0u8; 10], buf[..10], "empty start");
             assert_eq!(data[..], buf[10..buf.len() - 10], "result");
