@@ -5,3 +5,7 @@ resolver = "2"
 [workspace.package]
 version = "0.1.0"
 authors = ["clabby"]
+
+[profile.dev]
+opt-level = 1
+overflow-checks = false

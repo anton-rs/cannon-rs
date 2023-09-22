@@ -22,11 +22,33 @@ credits for the original idea and reference implementation of this concept go to
 
 ## Contributing
 
+To get started, a few dependencies are required:
+* [Rust toolchain][rustup]
+    * Recommended: [`cargo-nextest`][nextest]
+* [Go toolchain][golang]
+* [binutils][binutils]
+
+### Testing
+
+```sh
+# With `cargo-nextest`
+cargo nextest run --all --all-features
+# Without `cargo-nextest`
+cargo t --all --all-features
+```
+
+### Linting and Formatting
+
+```sh
+cargo +nightly fmt -- && cargo +nightly clippy --all --all-features -- -D warnings
+```
+
+### Running Benchmarks
 *todo*
 
 ## Documentation
 
-*todo*
+Rustdocs are available by running `cargo doc --open` after cloning the repo.
 
 ## Docker
 
@@ -35,3 +57,7 @@ credits for the original idea and reference implementation of this concept go to
 [geohot]: https://github.com/geohot
 [op-labs]: https://oplabs.co
 [cannon]: https://github.com/ethereum-optimism/optimism/tree/develop/cannon
+[rustup]: https://rustup.rs/
+[golang]: https://go.dev/doc/install
+[binutils]: https://www.gnu.org/software/binutils/
+[nextest]: https://nexte.st/
