@@ -318,8 +318,7 @@ where
                             a1 as Address,
                             a2 as u64,
                         );
-                        // TODO(clabby): perf: Vec reallocation bad
-                        let mut hint_data = Vec::default();
+                        let mut hint_data = Vec::with_capacity(a2 as usize);
                         reader.read_to_end(&mut hint_data)?;
                         self.state.last_hint.extend_from_slice(hint_data.as_slice());
 
