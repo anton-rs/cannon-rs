@@ -8,6 +8,4 @@ mod traits;
 pub use traits::{Hint, Hinter, Key, Oracle};
 
 mod types;
-pub use types::{
-    HinterFn, Keccak256Key, KeyType, LocalIndexKey, OracleFn, PreimageGetter, ReadWriterPair,
-};
+pub use types::{Keccak256Key, KeyType, LocalIndexKey, PreimageGetter};

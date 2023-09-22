@@ -1297,6 +1297,7 @@ dependencies = [
  "alloy-primitives",
  "anyhow",
  "once_cell",
+ "rand",
  "serde",
  "serde_json",
  "tokio",
