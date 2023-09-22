@@ -15,6 +15,7 @@ mod traits;
 pub use self::traits::{PreimageOracle, StateWitnessHasher};
 
 mod witness;
+pub use witness::StepWitness;
 
 mod utils;
 

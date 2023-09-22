@@ -78,7 +78,7 @@ where
     ///
     /// ### Returns
     /// - A [Result] indicating if the step was successful.
-    pub fn step(&mut self) -> Result<()> {
+    pub fn mips_step(&mut self) -> Result<()> {
         if self.state.exited {
             return Ok(());
         }
