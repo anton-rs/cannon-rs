@@ -3,7 +3,7 @@
 use crate::{traits::Hint, Key};
 use alloy_primitives::B256;
 use anyhow::Result;
-use std::{fmt::Write, io::Read};
+use std::io::{BufReader, BufWriter, Read, Write};
 
 #[repr(u8)]
 pub enum KeyType {
@@ -44,14 +44,17 @@ pub type OracleFn = fn(key: dyn Key) -> Vec<u8>;
 pub type HinterFn = fn(hint: dyn Hint);
 
 /// A [ReadWriterPair] is a wrapper around two types, implementing [Read] and [Write].
-pub struct ReadWriterPair<R: Read, W: Write> {
-    reader: R,
-    writer: W,
+pub struct ReadWriterPair<R: Read, W: ?Sized + Write> {
+    reader: BufReader<R>,
+    writer: BufWriter<W>,
 }
 
 impl<R: Read, W: Write> ReadWriterPair<R, W> {
     pub fn new(reader: R, writer: W) -> Self {
-        Self { reader, writer }
+        Self {
+            reader: BufReader::new(reader),
+            writer: BufWriter::new(writer),
+        }
     }
 }
 
@@ -70,10 +73,14 @@ where
     R: Read,
     W: Write,
 {
-    fn write_str(&mut self, s: &str) -> std::fmt::Result {
-        self.writer.write_str(s)
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.writer.write(buf)
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.writer.flush()
     }
 }
 
 /// A [PreimageGetter] is a function that can be used to fetch pre-images.
-pub type PreimageGetter = fn(key: B256) -> Result<Vec<u8>>;
+pub type PreimageGetter = Box<dyn Fn(B256) -> Result<Vec<u8>>>;
