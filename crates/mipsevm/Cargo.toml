@@ -18,6 +18,7 @@ anyhow = "1.0.75"
 tracing = "0.1.37"
 
 [dev-dependencies]
+preimage-oracle = { path = "../preimage" }
 rand = "0.8.5"
 revm = "3.3.0"
 criterion = { version = "0.5.1", features = ["html_reports"] }

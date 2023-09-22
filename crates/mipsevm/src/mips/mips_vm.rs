@@ -10,7 +10,7 @@ use crate::{
 use alloy_primitives::B256;
 use anyhow::Result;
 use std::{
-    io::{Cursor, Read, Write},
+    io::{self, Cursor, Read, Write},
     rc::Rc,
 };
 
@@ -48,7 +48,6 @@ where
         let mut data = B256::ZERO;
         let data_len =
             Cursor::new(&self.last_preimage[offset as usize..]).read(data.as_mut_slice())?;
-
         Ok((data, data_len))
     }
 
@@ -309,7 +308,7 @@ where
                         } else {
                             &mut self.std_err
                         };
-                        std::io::copy(&mut reader, writer)?;
+                        io::copy(&mut reader, writer)?;
                         v0 = a2;
                     }
                     Ok(Fd::HintWrite) => {
@@ -340,9 +339,6 @@ where
                         }
                     }
                     Ok(Fd::PreimageWrite) => {
-                        // TODO(clabby): This one's broken, `copy_from_slice` not the move here.
-                        // Should be using a reader.
-
                         let effective_address = a1 & 0xFFFFFFFC;
                         self.track_mem_access(effective_address as Address)?;
 
@@ -361,10 +357,14 @@ where
                         }
 
                         let key_copy = key;
-                        key.copy_from_slice(&key_copy[a2 as usize..]);
+                        io::copy(
+                            &mut key_copy[a2 as usize..].as_ref(),
+                            &mut key.as_mut_slice(),
+                        )?;
 
-                        let mut tmp = memory.to_be_bytes();
-                        tmp[alignment as usize..].copy_from_slice(&key[32 - a2 as usize..]);
+                        let _ = memory.to_be_bytes()[alignment as usize..]
+                            .as_ref()
+                            .read(&mut key.as_mut_slice()[32 - a2 as usize..])?;
 
                         self.state.preimage_key = key;
                         self.state.preimage_offset = 0;

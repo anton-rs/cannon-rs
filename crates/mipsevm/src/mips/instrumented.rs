@@ -102,6 +102,8 @@ where
 #[cfg(test)]
 mod test {
     use crate::PreimageOracle;
+    use alloy_primitives::B256;
+    use preimage_oracle::{Keccak256Key, Key};
 
     /// Used in tests to write the results to
     const BASE_ADDR_END: u32 = 0xBF_FF_FF_F0;
@@ -109,16 +111,20 @@ mod test {
     /// Used as the return-address for tests
     const END_ADDR: u32 = 0xA7_EF_00_D0;
 
-    struct StaticOracle;
+    struct StaticOracle {
+        preimage_data: Vec<u8>,
+    }
 
     impl PreimageOracle for StaticOracle {
         fn hint(&mut self, _value: &[u8]) {
             // noop
         }
 
-        fn get(&self, _key: alloy_primitives::B256) -> anyhow::Result<&[u8]> {
-            // noop
-            Ok(&[])
+        fn get(&self, key: B256) -> anyhow::Result<&[u8]> {
+            if key != (key as Keccak256Key).preimage_key() {
+                anyhow::bail!("Invalid preimage ")
+            }
+            Ok(self.preimage_data.as_slice())
         }
     }
 
@@ -145,10 +151,6 @@ mod test {
             for f in test_files.into_iter() {
                 if let Ok(f) = f {
                     let file_name = String::from(f.file_name().to_str().unwrap());
-                    if file_name.starts_with("oracle") {
-                        dbg!("Skipping oracle test");
-                        continue;
-                    }
 
                     // Short circuit early for `exit_group.bin`
                     let exit_group = file_name == "exit_group.bin";
@@ -171,8 +173,14 @@ mod test {
                     // Set the return address ($ra) to jump into when the test completes.
                     state.registers[31] = END_ADDR;
 
-                    let mut ins =
-                        InstrumentedState::new(state, StaticOracle {}, io::stdout(), io::stderr());
+                    let mut ins = InstrumentedState::new(
+                        state,
+                        StaticOracle {
+                            preimage_data: b"hello world".to_vec(),
+                        },
+                        io::stdout(),
+                        io::stderr(),
+                    );
 
                     for _ in 0..1000 {
                         if ins.state.pc == END_ADDR {

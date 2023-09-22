@@ -377,6 +377,7 @@ dependencies = [
  "criterion",
  "fnv",
  "once_cell",
+ "preimage-oracle",
  "rand",
  "revm",
  "serde",
