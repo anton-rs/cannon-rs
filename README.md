@@ -1,7 +1,5 @@
 <h1 align="center">
-  <img src="./assets/banner.png" alt="Markdownify" height="300">
-  <br>
-  <code>cannon-rs</code>
+<img src="./assets/banner.png" alt="Cannon" width="100%" align="center">
 </h1>
 
 <h4 align="center">
@@ -20,6 +18,7 @@
   <a href="#whats-a-cannon">What's a Cannon?</a> •
   <a href="#overview">Overview</a> •
   <a href="#credits">Credits</a> •
+  <a href="#benchmarks">Benchmarks</a> •
   <a href="#usage">Usage</a> •
   <a href="#contributing">Contributing</a> •
   <a href="#documentation">Documentation</a> •
@@ -28,10 +27,12 @@
 
 ## What's a Cannon?
 
-Cannon is a single MIPS thread context emulator that runs on the EVM. It's used primarily to run the [op-program][op-program], or the fault proof program,
-which is Go code modeling a stripped-down version of `op-geth`'s state transition code as well as the derivation pipeline, that is then compiled to MIPS.
-Cannon also features a native implementation of the MIPS thread context that is identical to the on-chain implementation, and this library is used by the
-[op-challenger][op-challenger] to generate state hashes while participating in the interactive dispute protocol.
+Cannon is an emulator designed to simulate a single MIPS thread context on the EVM. Its primary use is to execute the [`op-program`][op-program]
+(also known as the fault-proof program) for the [OP Stack][monorepo]'s interactive dispute protocol. The `op-program` consists
+of a stripped down version of `op-geth`'s state transition code in addition to the derivation pipeline, and produces deterministic results.
+Subsequently, it is compiled to MIPS to be ran on top of Cannon on-chain to prove fault in claims about the state of L2 on L1. Cannon also has a
+native implementation of the MIPS thread context that mirrors the on-chain version, which enables the [op-challenger][op-challenger] to generate
+state commitments for an `op-program` execution trace and participate in dispute games.
 
 *TL;DR:*
 * It's Rust code
@@ -44,11 +45,16 @@ Cannon also features a native implementation of the MIPS thread context that is 
 ## Overview
 * [`cannon-mipsevm`](./crates/mipsevm) - Contains the native implementation of the MIPS thread context emulator.
 * [`preimage-oracle`](./crates/preimage) - Rust bindings for interacting as client or sever over the Pre-image Oracle ABI.
+* [`cannon-contracts`](https://github.com/ethereum-optimism/optimism/tree/develop/packages/contracts-bedrock/src/cannon) - [*in OP monorepo*] Contains the Solidity implementation of the MIPS thread context and the Preimage Oracle.
 
 ## Credits
 
 This repository is heavily inspired by the original [Cannon][cannon], built by [George Hotz][geohot] and members of the [OP Labs][op-labs] team. The original implementation is written in Go, and can be found [in the Optimism monorepo][cannon]. All
-credits for the original idea and reference implementation of this concept go to these fine folks.
+credits for the original idea and reference implementation of this concept go to these folks.
+
+## Benchmarks
+
+*todo*
 
 ## Usage
 
@@ -74,15 +80,24 @@ cargo t --all --all-features
 ### Linting and Formatting
 
 ```sh
-cargo +nightly fmt -- && cargo +nightly clippy --all --all-features -- -D warnings
+cargo +nightly fmt --all -- && cargo +nightly clippy --all --all-features -- -D warnings
 ```
 
 ### Running Benchmarks
-*todo*
+
+```sh
+cargo bench --all --all-features
+```
 
 ## Documentation
 
 Rustdocs are available by running `cargo doc --open` after cloning the repo.
+
+### Specification
+
+The specification for both Cannon and the preimage oracle can be found in the [Optimism monorepo][monorepo].
+* [Cannon specification][cannon-specs]
+* [Preimage oracle specification][fpp-specs]
 
 ## Docker
 
@@ -90,6 +105,7 @@ Rustdocs are available by running `cargo doc --open` after cloning the repo.
 
 [geohot]: https://github.com/geohot
 [op-labs]: https://oplabs.co
+[monorepo]: https://github.com/ethereum-optimism/optimism
 [cannon]: https://github.com/ethereum-optimism/optimism/tree/develop/cannon
 [op-program]: https://github.com/ethereum-optimism/optimism/tree/develop/op-program
 [op-challenger]: https://github.com/ethereum-optimism/optimism/tree/develop/op-challenger
@@ -97,3 +113,5 @@ Rustdocs are available by running `cargo doc --open` after cloning the repo.
 [golang]: https://go.dev/doc/install
 [binutils]: https://www.gnu.org/software/binutils/
 [nextest]: https://nexte.st/
+[fpp-specs]: https://github.com/ethereum-optimism/optimism/blob/develop/specs/fault-proof.md
+[cannon-specs]: https://github.com/ethereum-optimism/optimism/blob/develop/specs/cannon-fault-proof-vm.md
