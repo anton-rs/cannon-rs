@@ -14,9 +14,10 @@ use std::{
     rc::Rc,
 };
 
-impl<W, P> InstrumentedState<W, P>
+impl<O, E, P> InstrumentedState<O, E, P>
 where
-    W: Write,
+    O: Write,
+    E: Write,
     P: PreimageOracle,
 {
     /// Read the preimage for the given key and offset from the [PreimageOracle] server.
@@ -28,7 +29,7 @@ where
     /// ### Returns
     /// - `Ok((data, data_len))`: The preimage data and length.
     /// - `Err(_)`: An error occurred while fetching the preimage.
-    pub fn read_preimage(&mut self, key: B256, offset: u32) -> Result<(B256, usize)> {
+    pub(crate) fn read_preimage(&mut self, key: B256, offset: u32) -> Result<(B256, usize)> {
         if key != self.last_preimage_key {
             self.last_preimage_key = key;
             let data = self.preimage_oracle.get(key)?;
@@ -58,7 +59,7 @@ where
     ///
     /// ### Returns
     /// - A [Result] indicating if the operation was successful.
-    pub fn track_mem_access(&mut self, effective_address: Address) -> Result<()> {
+    pub(crate) fn track_mem_access(&mut self, effective_address: Address) -> Result<()> {
         if self.mem_proof_enabled && self.last_mem_access != effective_address {
             if self.last_mem_access != Address::MAX {
                 anyhow::bail!("Unexpected diffrent memory access at {:x}, already have access at {:x} buffered", effective_address, self.last_mem_access);
@@ -78,7 +79,7 @@ where
     ///
     /// ### Returns
     /// - A [Result] indicating if the step was successful.
-    pub fn mips_step(&mut self) -> Result<()> {
+    pub(crate) fn inner_step(&mut self) -> Result<()> {
         if self.state.exited {
             return Ok(());
         }
@@ -210,7 +211,7 @@ where
     ///
     /// ### Returns
     /// - A [Result] indicating if the syscall dispatch was successful.
-    pub fn handle_syscall(&mut self) -> Result<()> {
+    pub(crate) fn handle_syscall(&mut self) -> Result<()> {
         let mut v0 = 0;
         let mut v1 = 0;
 
@@ -303,14 +304,12 @@ where
                             a1 as Address,
                             a2 as u64,
                         );
-                        std::io::copy(
-                            &mut reader,
-                            if matches!(fd, Fd::Stdout) {
-                                &mut self.std_out
-                            } else {
-                                &mut self.std_err
-                            },
-                        )?;
+                        let writer: &mut dyn Write = if matches!(fd, Fd::Stdout) {
+                            &mut self.std_out
+                        } else {
+                            &mut self.std_err
+                        };
+                        std::io::copy(&mut reader, writer)?;
                         v0 = a2;
                     }
                     Ok(Fd::HintWrite) => {
@@ -419,7 +418,7 @@ where
     ///
     /// ### Returns
     /// - A [Result] indicating if the branch dispatch was successful.
-    pub fn handle_branch(
+    pub(crate) fn handle_branch(
         &mut self,
         opcode: u32,
         instruction: u32,
@@ -480,7 +479,13 @@ where
     ///
     /// ### Returns
     /// - A [Result] indicating if the branch dispatch was successful.
-    pub fn handle_hi_lo(&mut self, fun: u32, rs: u32, rt: u32, store_reg: u32) -> Result<()> {
+    pub(crate) fn handle_hi_lo(
+        &mut self,
+        fun: u32,
+        rs: u32,
+        rt: u32,
+        store_reg: u32,
+    ) -> Result<()> {
         let val = match fun {
             0x10 => {
                 // mfhi
@@ -502,7 +507,7 @@ where
             }
             0x18 => {
                 // mult
-                let acc = (rs as i64) as u64 * (rt as i64) as u64;
+                let acc = ((rs as i32) as i64) as u64 * ((rt as i32) as i64) as u64;
                 self.state.hi = (acc >> 32) as u32;
                 self.state.lo = acc as u32;
                 0
@@ -547,7 +552,7 @@ where
     ///
     /// ### Returns
     /// - A [Result] indicating if the branch dispatch was successful.
-    pub fn handle_jump(&mut self, link_reg: u32, dest: u32) -> Result<()> {
+    pub(crate) fn handle_jump(&mut self, link_reg: u32, dest: u32) -> Result<()> {
         if self.state.next_pc != self.state.pc + 4 {
             anyhow::bail!("Unexpected jump in delay slot at {:x}", self.state.pc);
         }
@@ -570,7 +575,7 @@ where
     ///
     /// ### Returns
     /// - A [Result] indicating if the branch dispatch was successful.
-    pub fn handle_rd(&mut self, store_reg: u32, val: u32, conditional: bool) -> Result<()> {
+    pub(crate) fn handle_rd(&mut self, store_reg: u32, val: u32, conditional: bool) -> Result<()> {
         if store_reg >= 32 {
             anyhow::bail!("Invalid register index {}", store_reg);
         }
@@ -595,7 +600,7 @@ where
     /// ### Returns
     /// - `Ok(n)` - The result of the instruction execution.
     /// - `Err(_)`: An error occurred while executing the instruction.
-    pub fn execute(&mut self, instruction: u32, rs: u32, rt: u32, mem: u32) -> Result<u32> {
+    pub(crate) fn execute(&mut self, instruction: u32, rs: u32, rt: u32, mem: u32) -> Result<u32> {
         // Opcodes in MIPS are 6 bits in size, and stored in the high-order bits of the big-endian
         // instruction.
         let opcode = instruction >> 26;
@@ -621,9 +626,9 @@ where
 
             match fun {
                 // sll
-                0 => Ok(rt << (instruction >> 6) & 0x1F),
+                0 => Ok(rt << ((instruction >> 6) & 0x1F)),
                 // srl
-                2 => Ok(rt >> (instruction >> 6) & 0x1F),
+                2 => Ok(rt >> ((instruction >> 6) & 0x1F)),
                 // sra
                 3 => {
                     let shamt = (instruction >> 6) & 0x1F;
