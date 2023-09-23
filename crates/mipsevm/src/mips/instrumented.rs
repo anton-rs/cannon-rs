@@ -101,32 +101,13 @@ where
 
 #[cfg(test)]
 mod test {
-    use crate::PreimageOracle;
-    use alloy_primitives::B256;
-    use preimage_oracle::{Keccak256Key, Key};
+    use crate::test_utils::StaticOracle;
 
     /// Used in tests to write the results to
     const BASE_ADDR_END: u32 = 0xBF_FF_FF_F0;
 
     /// Used as the return-address for tests
     const END_ADDR: u32 = 0xA7_EF_00_D0;
-
-    struct StaticOracle {
-        preimage_data: Vec<u8>,
-    }
-
-    impl PreimageOracle for StaticOracle {
-        fn hint(&mut self, _value: &[u8]) {
-            // noop
-        }
-
-        fn get(&self, key: B256) -> anyhow::Result<&[u8]> {
-            if key != (key as Keccak256Key).preimage_key() {
-                anyhow::bail!("Invalid preimage ")
-            }
-            Ok(self.preimage_data.as_slice())
-        }
-    }
 
     mod open_mips {
         use super::*;
@@ -175,9 +156,7 @@ mod test {
 
                     let mut ins = InstrumentedState::new(
                         state,
-                        StaticOracle {
-                            preimage_data: b"hello world".to_vec(),
-                        },
+                        StaticOracle::new(b"hello world".to_vec()),
                         io::stdout(),
                         io::stderr(),
                     );
