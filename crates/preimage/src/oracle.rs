@@ -24,7 +24,6 @@ impl Oracle for OracleClient {
         let hash = key.preimage_key();
         self.tx.send(hash.to_vec())?;
 
-        let length = 0u64;
         let length = u64::from_be_bytes(self.rx.recv()?.as_slice().try_into()?);
 
         let payload = if length == 0 {

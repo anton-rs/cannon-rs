@@ -8,7 +8,7 @@ DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
 # Check if a folder with relative path `../optimism` exists and is not empty.
 # If it doesn't exist, install the submodules.
-if [ ! -d "$DIR/optimism" ]; then
+if [ ! -d "$DIR/optimism"  ] || [ -z "$(ls -A $DIR/optimism)" ]; then
     echo "Error: Optimism monorepo not present. Initializing submodules..."
     git submodule update --init --recursive
 fi

@@ -101,7 +101,8 @@ The specification for both Cannon and the preimage oracle can be found in the [O
 
 ## Docker
 
-*todo*
+The docker image for `cannon-rs` is located in the [docker](./docker) directory, and can be built using the
+script provided.
 
 [geohot]: https://github.com/geohot
 [op-labs]: https://oplabs.co
