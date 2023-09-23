@@ -54,6 +54,8 @@ credits for the original idea and reference implementation of this concept go to
 
 ## Benchmarks
 
+Benchmarks are ran on a 2021 Macbook Pro with an M1 Max and 64 GB of unified memory.
+
 *todo*
 
 ## Usage

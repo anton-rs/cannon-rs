@@ -14,13 +14,13 @@ serde = { version = "1.0.188", features = ["derive"] }
 serde_json = "1.0.106"
 fnv = "1.0.7"
 revm = { version = "3.3.0", features = ["no_gas_measuring"] }
+preimage-oracle = { path = "../preimage" }
 
 # misc
 anyhow = "1.0.75"
 tracing = "0.1.37"
 
 [dev-dependencies]
-preimage-oracle = { path = "../preimage" }
 rand = "0.8.5"
 criterion = { version = "0.5.1", features = ["html_reports"] }
 

@@ -26,6 +26,16 @@ pub enum KeyType {
     GlobalKeccak = 2,
 }
 
+impl From<u8> for KeyType {
+    fn from(n: u8) -> Self {
+        match n {
+            1 => KeyType::Local,
+            2 => KeyType::GlobalKeccak,
+            _ => KeyType::_Illegal,
+        }
+    }
+}
+
 impl Key for LocalIndexKey {
     fn preimage_key(self) -> B256 {
         let mut out = B256::ZERO;

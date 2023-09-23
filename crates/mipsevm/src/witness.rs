@@ -1,7 +1,9 @@
 //! This module contains the various witness types.
 
 use crate::{State, StateWitness, StateWitnessHasher};
-use alloy_primitives::{keccak256, B256};
+use alloy_primitives::{keccak256, Bytes, B256, U256};
+use alloy_sol_types::{sol, SolCall};
+use preimage_oracle::KeyType;
 
 /// The size of an encoded [StateWitness] in bytes.
 pub(crate) const STATE_WITNESS_SIZE: usize = 226;
@@ -42,5 +44,98 @@ impl Default for StepWitness {
             preimage_value: Default::default(),
             preimage_offset: Default::default(),
         }
+    }
+}
+
+sol! {
+    // `PreimageOracle` loadLocalData function.
+    function loadLocalData(uint256,bytes32,uint256,uint256) external returns (bytes32);
+
+    // `PreimageOracle` loadKeccak256PreimagePart function.
+    function loadKeccak256PreimagePart(uint256,bytes) external;
+
+    // `MIPS` step function.
+    function step(bytes,bytes) external returns (bytes32);
+}
+
+impl StepWitness {
+    /// Returns `true` if the step witness has a preimage.
+    pub fn has_preimage(&self) -> bool {
+        self.preimage_key != B256::ZERO
+    }
+
+    /// ABI encodes the input to the preimage oracle, if the [StepWitness] has a preimage request.
+    ///
+    /// ### Returns
+    /// - `Some(input)` if the [StepWitness] has a preimage request.
+    /// - `None` if the [StepWitness] does not have a preimage request.
+    pub fn encode_preimage_oracle_input(&self) -> Option<Bytes> {
+        if self.preimage_key == B256::ZERO {
+            #[cfg(feature = "tracing")]
+            tracing::warn!("Cannot encode preimage oracle input without preimage");
+            return None;
+        }
+
+        match KeyType::from(self.preimage_key[0]) {
+            KeyType::_Illegal => {
+                #[cfg(feature = "tracing")]
+                tracing::error!("Illegal key type");
+                None
+            }
+            KeyType::Local => {
+                if self.preimage_value.len() > 32 + 8 {
+                    #[cfg(feature = "tracing")]
+                    tracing::error!(
+                        target: "mipsevm::step_witness",
+                        "Local preimage value exceeds maximum size of 32 bytes with key 0x{:x}",
+                        self.preimage_key
+                    );
+                    return None;
+                }
+
+                let preimage_part = &self.preimage_value[8..];
+                let mut tmp = [0u8; 32];
+                tmp[0..preimage_part.len()].copy_from_slice(preimage_part);
+
+                let call = loadLocalDataCall {
+                    _0: self.preimage_key.into(),
+                    _1: tmp,
+                    _2: U256::from(self.preimage_value.len() - 8),
+                    _3: U256::from(self.preimage_offset),
+                };
+
+                Some(call.encode().into())
+            }
+            KeyType::GlobalKeccak => {
+                let call = loadKeccak256PreimagePartCall {
+                    _0: U256::from(self.preimage_offset),
+                    _1: self.preimage_value[8..].into(),
+                };
+
+                Some(call.encode().into())
+            }
+        }
+    }
+
+    /// ABI encodes the input to the MIPS step function.
+    ///
+    /// ### Returns
+    /// - The ABI encoded input to the MIPS step function.
+    pub fn encode_step_input(&self) -> Bytes {
+        let mut abi_state_len = self.state.len();
+        if abi_state_len % 32 != 0 {
+            abi_state_len += 32 - (abi_state_len % 32);
+        }
+
+        // Pad state to 32 byte multiple per ABI
+        let mut abi_state = vec![0u8; abi_state_len];
+        abi_state[..self.state.len()].copy_from_slice(&self.state);
+
+        let call = stepCall {
+            _0: abi_state,
+            _1: self.mem_proof.clone(),
+        };
+
+        call.encode().into()
     }
 }

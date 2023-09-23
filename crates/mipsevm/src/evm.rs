@@ -1,6 +1,7 @@
 //! This module contains a wrapper around a [revm] inspector with an in-memory backend
 //! that has the MIPS & PreimageOracle smart contracts deployed at deterministic addresses.
 
+use crate::{StateWitness, StateWitnessHasher, StepWitness};
 use alloy_primitives::{hex, Address, U256};
 use anyhow::Result;
 use revm::{
@@ -15,7 +16,7 @@ use revm::{
 /// The address of the deployed MIPS VM on the in-memory EVM.
 pub const MIPS_ADDR: [u8; 20] = hex!("000000000000000000000000000000000000C0DE");
 /// The address of the deployed PreimageOracle on the in-memory EVM.
-pub const PREIMAGE_ORACLE_ADDR: [u8; 20] = hex!("0000000000000000000000000000000000000420");
+pub const PREIMAGE_ORACLE_ADDR: [u8; 20] = hex!("00000000000000000000000000000000424f4f4b");
 
 /// The creation EVM bytecode of the MIPS contract. Does not include constructor arguments.
 pub const MIPS_CREATION_CODE: &str = include_str!("../bindings/mips_creation.bin");
@@ -91,6 +92,89 @@ impl MipsEVM<CacheDB<EmptyDB>> {
             self.deploy_contract(B160::from_slice(MIPS_ADDR.as_slice()), code)
         } else {
             anyhow::bail!("Failed to deploy MIPS contract");
+        }
+    }
+
+    /// Perform a single instruction step on the MIPS smart contract from the VM state encoded
+    /// in the [StepWitness] passed.
+    ///
+    /// ### Takes
+    /// - `witness`: The [StepWitness] containing the VM state to step.
+    ///
+    /// ### Returns
+    /// - A [Result] containing the post-state hash of the MIPS VM or an error returned during
+    /// execution.
+    pub fn step(&mut self, witness: StepWitness) -> Result<B256> {
+        if witness.has_preimage() {
+            #[cfg(feature = "tracing")]
+            tracing::info!(
+                target: "mipsevm::evm",
+                "Reading preimage key {:x} at offset {}",
+                witness.preimage_key,
+                witness.preimage_offset
+            );
+
+            let preimage_oracle_input =
+                witness
+                    .encode_preimage_oracle_input()
+                    .ok_or(anyhow::anyhow!(
+                        "Failed to ABI encode preimage oracle input."
+                    ))?;
+            self.fill_tx_env(
+                TransactTo::Call(PREIMAGE_ORACLE_ADDR.into()),
+                preimage_oracle_input.0,
+            );
+            self.inner.transact_commit().map_err(|_| {
+                anyhow::anyhow!("Failed to commit preimage to PreimageOracle contract")
+            })?;
+        }
+
+        #[cfg(feature = "tracing")]
+        tracing::debug!(
+            target: "mipsevm::evm",
+            "Performing EVM step",
+        );
+
+        let step_input = witness.encode_step_input();
+        self.fill_tx_env(TransactTo::Call(MIPS_ADDR.into()), step_input.0);
+        if let Ok(ResultAndState {
+            result:
+                revm::primitives::ExecutionResult::Success {
+                    reason: _,
+                    gas_used: _,
+                    gas_refunded: _,
+                    logs,
+                    output: Output::Call(output),
+                },
+            state: _,
+        }) = self.inner.transact_ref()
+        {
+            let output = B256::from_slice(&output);
+
+            #[cfg(feature = "tracing")]
+            tracing::debug!(
+                target: "mipsevm::evm",
+                "EVM step successful with resulting post-state hash: {:x}",
+                output,
+            );
+
+            if logs.len() != 1 {
+                anyhow::bail!("Expected 1 log, got {}", logs.len());
+            }
+
+            let post_state: StateWitness = logs[0].data.to_vec().as_slice().try_into()?;
+
+            if post_state.state_hash().as_slice() != output.as_slice() {
+                anyhow::bail!(
+                    "Post-state hash does not match state hash in log: {:x} != {:x}",
+                    output,
+                    post_state.state_hash()
+                );
+            }
+
+            Ok(output)
+        } else {
+            anyhow::bail!("Failed to step MIPS contract");
         }
     }
 
