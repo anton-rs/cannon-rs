@@ -12,8 +12,8 @@ pub type PageIndex = u64;
 /// A [Gindex] is a generalized index, defined as $2^{\text{depth}} + \text{index}$.
 pub type Gindex = u64;
 
-/// An [Address] is a 64 bit address in the MIPS emulator's memory.
-pub type Address = u64;
+/// An [Address] is a 32 bit address in the MIPS emulator's memory.
+pub type Address = u32;
 
 /// The [VMStatus] is an indicator within the [StateWitness] hash that indicates
 /// the current status of the MIPS emulator.

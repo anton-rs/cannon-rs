@@ -66,7 +66,7 @@ where
     /// - Err(_): An error occurred while processing the instruction step in the MIPS emulator.
     pub fn step(&mut self, proof: bool) -> Result<Option<StepWitness>> {
         self.mem_proof_enabled = proof;
-        self.last_mem_access = !0u32 as u64;
+        self.last_mem_access = !0u32 as Address;
         self.last_preimage_offset = !0u32;
 
         let mut witness = None;
@@ -120,7 +120,6 @@ mod test {
         };
 
         #[test]
-        // #[ignore]
         fn open_mips_tests() {
             let tests_path = PathBuf::from(std::env::current_dir().unwrap())
                 .join("open_mips_tests")

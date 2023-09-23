@@ -31,8 +31,8 @@ where
     /// - `Err(_)`: An error occurred while fetching the preimage.
     pub(crate) fn read_preimage(&mut self, key: B256, offset: u32) -> Result<(B256, usize)> {
         if key != self.last_preimage_key {
-            self.last_preimage_key = key;
             let data = self.preimage_oracle.get(key)?;
+            self.last_preimage_key = key;
 
             // Add the length prefix to the preimage
             // Resizes the `last_preimage` vec in-place to reduce reallocations.
@@ -60,7 +60,7 @@ where
     /// - A [Result] indicating if the operation was successful.
     pub(crate) fn track_mem_access(&mut self, effective_address: Address) -> Result<()> {
         if self.mem_proof_enabled && self.last_mem_access != effective_address {
-            if self.last_mem_access as u32 != u32::MAX {
+            if self.last_mem_access != Address::MAX {
                 anyhow::bail!("Unexpected diffrent memory access at {:x}, already have access at {:x} buffered", effective_address, self.last_mem_access);
             }
 
@@ -214,7 +214,7 @@ where
         let mut v0 = 0;
         let mut v1 = 0;
 
-        let (a0, a1, a2) = (
+        let (a0, a1, mut a2) = (
             self.state.registers[4],
             self.state.registers[5],
             self.state.registers[6],
@@ -256,6 +256,7 @@ where
                         // Nothing to do; Leave v0 and v1 zero, read nothing, and give no error.
                     }
                     Ok(Fd::PreimageRead) => {
+                        dbg!("moose");
                         let effective_address = (a1 & 0xFFFFFFFC) as Address;
 
                         self.track_mem_access(effective_address)?;
@@ -298,11 +299,8 @@ where
                 },
                 Syscall::Write => match (a0 as u8).try_into() {
                     Ok(fd @ (Fd::Stdout | Fd::StdErr)) => {
-                        let mut reader = MemoryReader::new(
-                            Rc::clone(&self.state.memory),
-                            a1 as Address,
-                            a2 as u64,
-                        );
+                        let mut reader =
+                            MemoryReader::new(Rc::clone(&self.state.memory), a1 as Address, a2);
                         let writer: &mut dyn Write = if matches!(fd, Fd::Stdout) {
                             &mut self.std_out
                         } else {
@@ -312,14 +310,11 @@ where
                         v0 = a2;
                     }
                     Ok(Fd::HintWrite) => {
-                        let mut reader = MemoryReader::new(
-                            Rc::clone(&self.state.memory),
-                            a1 as Address,
-                            a2 as u64,
-                        );
+                        let mut reader =
+                            MemoryReader::new(Rc::clone(&self.state.memory), a1 as Address, a2);
                         let mut hint_data = Vec::with_capacity(a2 as usize);
                         reader.read_to_end(&mut hint_data)?;
-                        self.state.last_hint.extend_from_slice(hint_data.as_slice());
+                        self.state.last_hint.extend(hint_data);
 
                         // Continue processing while there is enough data to check if there are any
                         // hints.
@@ -351,7 +346,6 @@ where
                         let alignment = a1 & 0x3;
                         let space = 4 - alignment;
 
-                        let mut a2 = a2;
                         if space < a2 {
                             a2 = space;
                         }
