@@ -10,7 +10,7 @@ use anyhow::Result;
 ///
 /// The [State] by itself does not contain functionality for performing instruction steps
 /// or executing the MIPS emulator. For this, use the [crate::InstrumentedState] struct.
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct State {
     /// The [Memory] of the emulated MIPS thread context.
     pub memory: Rc<RefCell<Memory>>,

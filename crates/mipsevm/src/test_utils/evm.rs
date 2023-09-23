@@ -262,7 +262,6 @@ mod test {
 
     #[test]
     fn evm() {
-        // todo
         let mut mips_evm = MipsEVM::new();
         mips_evm.try_init().unwrap();
 
@@ -351,6 +350,101 @@ mod test {
                     assert_eq!(result, 1, "must have success result {:?}", f.file_name());
                 }
             }
+        }
+    }
+
+    #[test]
+    fn evm_single_step() {
+        let mut mips_evm = MipsEVM::new();
+        mips_evm.try_init().unwrap();
+
+        let cases = [
+            ("j MSB set target", 0, 4, 0x0A_00_00_02),
+            (
+                "j non-zero PC region",
+                0x10_00_00_00,
+                0x10_00_00_04,
+                0x08_00_00_02,
+            ),
+            ("jal MSB set target", 0, 4, 0x0E_00_00_02),
+            (
+                "jal non-zero PC region",
+                0x10_00_00_00,
+                0x10_00_00_04,
+                0x0C_00_00_02,
+            ),
+        ];
+
+        for (name, pc, next_pc, instruction) in cases {
+            println!(" -> Running test: {name}");
+
+            let mut state = State::default();
+            state.pc = pc;
+            state.next_pc = next_pc;
+            state
+                .memory
+                .borrow_mut()
+                .set_memory(pc, instruction)
+                .unwrap();
+
+            let mut instrumented = InstrumentedState::new(
+                state,
+                StaticOracle::new(b"hello world".to_vec()),
+                io::stdout(),
+                io::stderr(),
+            );
+            let step_witness = instrumented.step(true).unwrap().unwrap();
+
+            let evm_post = mips_evm.step(step_witness).unwrap();
+            let rust_post = instrumented.state.encode_witness().unwrap();
+
+            assert_eq!(evm_post, rust_post);
+        }
+    }
+
+    #[test]
+    fn evm_fault() {
+        let mut mips_evm = MipsEVM::new();
+        mips_evm.try_init().unwrap();
+
+        let cases = [
+            ("illegal instruction", 0, 0xFF_FF_FF_FFu32),
+            ("branch in delay slot", 8, 0x11_02_00_03),
+            ("jump in delay slot", 8, 0x0c_00_00_0c),
+        ];
+
+        for (name, next_pc, instruction) in cases {
+            println!(" -> Running test: {name}");
+
+            let mut state = State::default();
+            state.next_pc = next_pc;
+            let mut initial_state = state.clone();
+            state
+                .memory
+                .borrow_mut()
+                .set_memory(0, instruction)
+                .unwrap();
+
+            // Set the return address ($ra) to jump to when the test completes.
+            state.registers[31] = END_ADDR;
+
+            let mut instrumented = InstrumentedState::new(
+                state,
+                StaticOracle::new(b"hello world".to_vec()),
+                io::stdout(),
+                io::stderr(),
+            );
+            assert!(instrumented.step(true).is_err());
+
+            let instruction_proof = initial_state.memory.borrow_mut().merkle_proof(0).unwrap();
+            let step_witness = StepWitness {
+                state: initial_state.encode_witness().unwrap(),
+                mem_proof: instruction_proof.to_vec(),
+                preimage_key: alloy_primitives::B256::ZERO,
+                preimage_value: Vec::default(),
+                preimage_offset: 0,
+            };
+            assert!(mips_evm.step(step_witness).is_err());
         }
     }
 }
