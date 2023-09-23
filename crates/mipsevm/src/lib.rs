@@ -2,6 +2,8 @@
 #![feature(generic_const_exprs)]
 #![allow(incomplete_features, dead_code)]
 
+pub(crate) mod traces;
+
 mod memory;
 pub use self::memory::Memory;
 

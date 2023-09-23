@@ -71,25 +71,18 @@ impl StepWitness {
     /// - `None` if the [StepWitness] does not have a preimage request.
     pub fn encode_preimage_oracle_input(&self) -> Option<Bytes> {
         if self.preimage_key == B256::ZERO {
-            #[cfg(feature = "tracing")]
-            tracing::warn!("Cannot encode preimage oracle input without preimage");
+            crate::error!(target: "mipsevm::step_witness", "Cannot encode preimage oracle input without preimage key");
             return None;
         }
 
         match KeyType::from(self.preimage_key[0]) {
             KeyType::_Illegal => {
-                #[cfg(feature = "tracing")]
-                tracing::error!("Illegal key type");
+                crate::error!(target: "mipsevm::step_witness", "Illegal key type");
                 None
             }
             KeyType::Local => {
                 if self.preimage_value.len() > 32 + 8 {
-                    #[cfg(feature = "tracing")]
-                    tracing::error!(
-                        target: "mipsevm::step_witness",
-                        "Local preimage value exceeds maximum size of 32 bytes with key 0x{:x}",
-                        self.preimage_key
-                    );
+                    crate::error!(target: "mipsevm::step_witness", "Local preimage value exceeds maximum size of 32 bytes with key 0x{:x}", self.preimage_key);
                     return None;
                 }
 
