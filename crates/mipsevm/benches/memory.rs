@@ -38,6 +38,18 @@ fn merkle_root(c: &mut Criterion) {
             memory.merkle_root().unwrap();
         });
     });
+
+    c.bench_function("Merkle Root (memory size = 200 MB)", |b| {
+        let mut memory = Memory::default();
+        let mut data = vec![0u8; 200_000_000];
+        rand::thread_rng().fill_bytes(&mut data[..]);
+        memory
+            .set_memory_range(0, &data[..])
+            .expect("Should not error");
+        b.iter(|| {
+            memory.merkle_root().unwrap();
+        });
+    });
 }
 
 criterion_group!(benches, merkle_root);
