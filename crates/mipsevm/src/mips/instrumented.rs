@@ -107,14 +107,9 @@ where
 mod test {
     use crate::test_utils::StaticOracle;
 
-    /// Used in tests to write the results to
-    const BASE_ADDR_END: u32 = 0xBF_FF_FF_F0;
-
-    /// Used as the return-address for tests
-    const END_ADDR: u32 = 0xA7_EF_00_D0;
-
     mod open_mips {
         use super::*;
+        use crate::test_utils::{BASE_ADDR_END, END_ADDR};
         use crate::{Address, InstrumentedState, Memory, State};
         use std::{
             cell::RefCell,

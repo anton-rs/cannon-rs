@@ -60,7 +60,7 @@ where
     /// - A [Result] indicating if the operation was successful.
     pub(crate) fn track_mem_access(&mut self, effective_address: Address) -> Result<()> {
         if self.mem_proof_enabled && self.last_mem_access != effective_address {
-            if self.last_mem_access != Address::MAX {
+            if self.last_mem_access as u32 != u32::MAX {
                 anyhow::bail!("Unexpected diffrent memory access at {:x}, already have access at {:x} buffered", effective_address, self.last_mem_access);
             }
 
