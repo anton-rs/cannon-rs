@@ -19,7 +19,6 @@
   <a href="#overview">Overview</a> •
   <a href="#credits">Credits</a> •
   <a href="#benchmarks">Benchmarks</a> •
-  <a href="#usage">Usage</a> •
   <a href="#contributing">Contributing</a> •
   <a href="#documentation">Documentation</a> •
   <a href="#docker">Docker</a>
@@ -54,10 +53,10 @@ credits for the original idea and reference implementation of this concept go to
 
 ## Benchmarks
 
-The below benchmarks are ran on a 2021 Macbook Pro with an M1 Max and 32 GB of unified memory and taken
-on commit [`83e4c56`](https://github.com/anton-rs/cannon-rs/tree/83e4c5643193aac19046ef29b5018137b5eb05f2).
-
 ### `cannon-mipsevm` benchmarks
+
+The below benchmark was ran on a 2021 Macbook Pro with an M1 Max and 32 GB of unified memory
+on commit [`83e4c56`](https://github.com/anton-rs/cannon-rs/tree/83e4c5643193aac19046ef29b5018137b5eb05f2).
 
 | Benchmark Name             | `cannon` mean (Reference) | `cannon-rs` mean    |
 |----------------------------|---------------------------|---------------------|
@@ -66,11 +65,7 @@ on commit [`83e4c56`](https://github.com/anton-rs/cannon-rs/tree/83e4c5643193aac
 | Memory Merkle Root (100MB) | 3.34s                     | 1.16s (-65.29%)     |
 | Memory Merkle Root (200MB) | 6.30s                     | 2.14s (-66.01%)     |
 
-*todo*
-
-## Usage
-
-*todo*
+*todo - execution benchmarks*
 
 ## Contributing
 
