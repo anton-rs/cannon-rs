@@ -7,6 +7,9 @@ use anyhow::Result;
 /// A [PreimageGetter] is a function that can be used to fetch pre-images.
 pub type PreimageGetter = Box<dyn Fn(B256) -> Result<Vec<u8>>>;
 
+/// A [HintHandler] is a function that can be used to handle hints from a [crate::HintWriter].
+pub type HintHandler = Box<dyn Fn(&[u8]) -> Result<()>>;
+
 /// A [Keccak256Key] wraps a keccak256 hash to use it as a typed pre-image key.
 pub type Keccak256Key = B256;
 

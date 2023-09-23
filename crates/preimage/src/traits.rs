@@ -22,14 +22,19 @@ pub trait Oracle {
 pub trait Hint {
     /// Returns a string representation of the data the host should prepare
     /// pre-images for.
-    fn hint() -> String;
+    fn hint(&self) -> &[u8];
 }
 
 // [Hinter] is an trait describing behavior for writing hints to the host.
 // This may be implemented as a no-op or logging hinter if the program is executing
 // in a read-only environment where the host is expected to have all pre-images ready.
 pub trait Hinter {
-    /// Returns a string representation of the data the host should prepare
-    /// pre-images for.
-    fn hint(&self) -> String;
+    /// Sends a hint to the host.
+    ///
+    /// ### Takes
+    /// - `hint` - The hint to send to the host.
+    ///
+    /// ### Returns
+    /// - A [Result] indicating whether or not the hint was successfully sent.
+    fn hint<T: Hint>(&self, hint: T) -> Result<()>;
 }
