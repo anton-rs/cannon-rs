@@ -31,10 +31,10 @@ pub trait Hint {
 pub trait Hinter {
     /// Sends a hint to the host.
     ///
+    /// ### Takes
+    /// - `hint` - The hint to send to the host.
+    ///
     /// ### Returns
-    /// - `Ok(true)` if the hint was sent successfully.
-    /// - `Ok(false)` if the hint was not sent successfully due to the host being
-    ///               closed.
-    /// - `Err(e)` if the hint was not sent successfully due to an error.
-    fn hint<T: Hint>(&self, hint: T) -> Result<bool>;
+    /// - A [Result] indicating whether or not the hint was successfully sent.
+    fn hint<T: Hint>(&self, hint: T) -> Result<()>;
 }
