@@ -106,8 +106,7 @@ impl MipsEVM<CacheDB<EmptyDB>> {
     /// execution.
     pub fn step(&mut self, witness: StepWitness) -> Result<B256> {
         if witness.has_preimage() {
-            #[cfg(feature = "tracing")]
-            tracing::info!(
+            crate::debug!(
                 target: "mipsevm::evm",
                 "Reading preimage key {:x} at offset {}",
                 witness.preimage_key,
@@ -129,11 +128,7 @@ impl MipsEVM<CacheDB<EmptyDB>> {
             })?;
         }
 
-        #[cfg(feature = "tracing")]
-        tracing::debug!(
-            target: "mipsevm::evm",
-            "Performing EVM step",
-        );
+        crate::debug!(target: "mipsevm::evm", "Performing EVM step");
 
         let step_input = witness.encode_step_input();
         self.fill_tx_env(TransactTo::Call(MIPS_ADDR.into()), step_input.0);
@@ -151,12 +146,7 @@ impl MipsEVM<CacheDB<EmptyDB>> {
         {
             let output = B256::from_slice(&output);
 
-            #[cfg(feature = "tracing")]
-            tracing::debug!(
-                target: "mipsevm::evm",
-                "EVM step successful with resulting post-state hash: {:x}",
-                output,
-            );
+            crate::debug!(target: "mipsevm::evm", "EVM step successful with resulting post-state hash: {:x}", output);
 
             if logs.len() != 1 {
                 anyhow::bail!("Expected 1 log, got {}", logs.len());

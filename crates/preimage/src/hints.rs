@@ -27,10 +27,12 @@ impl Hinter for HintWriter {
         hint_bytes[0..4].copy_from_slice((hint.len() as u32).to_be_bytes().as_ref());
         hint_bytes[4..].copy_from_slice(hint);
 
+        crate::debug!("Sending hint: {:?}", hint_bytes);
         self.tx.send(hint_bytes)?;
 
         let n = self.rx.recv()?;
         if n.len() != 1 {
+            crate::error!("Failed to read hint ack, received response: {:?}", n);
             anyhow::bail!(
                 "Failed to read invalid pre-image hint ack, received response: {:?}",
                 n
@@ -74,6 +76,7 @@ impl HintReader {
         if let Err(e) = router(&payload) {
             // Write back on error to unblock the hint writer.
             self.tx.send(vec![0])?;
+            crate::error!("Failed to handle hint: {:?}", e);
             anyhow::bail!("Failed to handle hint: {:?}", e);
         }
 
