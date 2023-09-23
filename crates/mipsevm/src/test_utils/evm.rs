@@ -67,7 +67,8 @@ impl MipsEVM<CacheDB<EmptyDB>> {
         // Deploy the MIPS contract prior to deploying it manually. This contract has an immutable
         // variable, so we let the creation code fill this in for us, and then deploy it to the
         // test address.
-        let encoded_preimage_addr = Address::from_slice(MIPS_ADDR.as_slice()).into_word();
+        let encoded_preimage_addr =
+            Address::from_slice(PREIMAGE_ORACLE_ADDR.as_slice()).into_word();
         let mips_creation_heap = hex::decode(MIPS_CREATION_CODE)?
             .into_iter()
             .chain(encoded_preimage_addr)
@@ -275,11 +276,6 @@ mod test {
             if let Ok(f) = f {
                 let file_name = String::from(f.file_name().to_str().unwrap());
                 println!(" -> Running test: {file_name}");
-
-                if file_name.starts_with("oracle") {
-                    println!("skipping oracle test");
-                    continue;
-                }
 
                 // Short circuit early for `exit_group.bin`
                 let exit_group = file_name == "exit_group.bin";

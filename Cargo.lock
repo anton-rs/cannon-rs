@@ -402,7 +402,6 @@ dependencies = [
  "alloy-primitives",
  "alloy-sol-types",
  "anyhow",
- "cfg-if",
  "criterion",
  "fnv",
  "once_cell",

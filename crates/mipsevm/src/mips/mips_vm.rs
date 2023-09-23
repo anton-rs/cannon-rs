@@ -256,7 +256,6 @@ where
                         // Nothing to do; Leave v0 and v1 zero, read nothing, and give no error.
                     }
                     Ok(Fd::PreimageRead) => {
-                        dbg!("moose");
                         let effective_address = (a1 & 0xFFFFFFFC) as Address;
 
                         self.track_mem_access(effective_address)?;
