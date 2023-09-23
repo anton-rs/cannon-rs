@@ -24,3 +24,8 @@ pub use types::{Address, Fd, Gindex, Page, PageIndex, StateWitness, VMStatus};
 
 mod mips;
 pub use mips::InstrumentedState;
+
+mod evm;
+
+#[cfg(test)]
+mod test_utils;
