@@ -7,20 +7,20 @@ version.workspace = true
 authors.workspace = true
 
 [dependencies]
+preimage-oracle = { path = "../preimage" }
 alloy-primitives = "0.3.3"
 alloy-sol-types = "0.3.2"
 once_cell = "1.18.0"
 serde = { version = "1.0.188", features = ["derive"] }
 serde_json = "1.0.106"
 fnv = "1.0.7"
-revm = { version = "3.3.0", features = ["no_gas_measuring"] }
-preimage-oracle = { path = "../preimage" }
 
 # misc
 anyhow = "1.0.75"
 tracing = { version = "0.1.37", optional = true }
 
 [dev-dependencies]
+revm = { version = "3.3.0", features = ["no_gas_measuring"] }
 rand = "0.8.5"
 criterion = { version = "0.5.1", features = ["html_reports"] }
 

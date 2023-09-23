@@ -115,17 +115,8 @@ impl StepWitness {
     /// ### Returns
     /// - The ABI encoded input to the MIPS step function.
     pub fn encode_step_input(&self) -> Bytes {
-        let mut abi_state_len = self.state.len();
-        if abi_state_len % 32 != 0 {
-            abi_state_len += 32 - (abi_state_len % 32);
-        }
-
-        // Pad state to 32 byte multiple per ABI
-        let mut abi_state = vec![0u8; abi_state_len];
-        abi_state[..self.state.len()].copy_from_slice(&self.state);
-
         let call = stepCall {
-            _0: abi_state,
+            _0: self.state.to_vec(),
             _1: self.mem_proof.clone(),
         };
 

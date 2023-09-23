@@ -66,7 +66,7 @@ where
     /// - Err(_): An error occurred while processing the instruction step in the MIPS emulator.
     pub fn step(&mut self, proof: bool) -> Result<Option<StepWitness>> {
         self.mem_proof_enabled = proof;
-        self.last_mem_access = !0u32 as u64;
+        self.last_mem_access = !0u32 as Address;
         self.last_preimage_offset = !0u32;
 
         let mut witness = None;
@@ -107,14 +107,9 @@ where
 mod test {
     use crate::test_utils::StaticOracle;
 
-    /// Used in tests to write the results to
-    const BASE_ADDR_END: u32 = 0xBF_FF_FF_F0;
-
-    /// Used as the return-address for tests
-    const END_ADDR: u32 = 0xA7_EF_00_D0;
-
     mod open_mips {
         use super::*;
+        use crate::test_utils::{BASE_ADDR_END, END_ADDR};
         use crate::{Address, InstrumentedState, Memory, State};
         use std::{
             cell::RefCell,
@@ -125,7 +120,6 @@ mod test {
         };
 
         #[test]
-        // #[ignore]
         fn open_mips_tests() {
             let tests_path = PathBuf::from(std::env::current_dir().unwrap())
                 .join("open_mips_tests")

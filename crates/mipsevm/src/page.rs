@@ -51,7 +51,7 @@ impl CachedPage {
     /// ### Returns
     /// - A [Result] indicating if the operation was successful.
     pub fn invalidate(&mut self, page_addr: Address) -> Result<()> {
-        if page_addr >= PAGE_SIZE as u64 {
+        if page_addr >= PAGE_SIZE as Address {
             anyhow::bail!("Invalid page address: {}", page_addr);
         }
 

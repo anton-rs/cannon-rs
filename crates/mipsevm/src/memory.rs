@@ -61,13 +61,13 @@ impl Memory {
         }
 
         // Find the page and invalidate the address within it.
-        match self.page_lookup(address >> page::PAGE_ADDRESS_SIZE) {
+        match self.page_lookup(address as u64 >> page::PAGE_ADDRESS_SIZE) {
             Some(page) => {
                 let mut page = page.borrow_mut();
                 let prev_valid = !page.is_valid(1);
 
                 // Invalidate the address within the page.
-                page.invalidate(address & page::PAGE_ADDRESS_MASK as u64)?;
+                page.invalidate(address & page::PAGE_ADDRESS_MASK as u32)?;
 
                 // If the page was already invalid before, then nodes to the memory
                 // root will also still be invalid.
@@ -82,7 +82,7 @@ impl Memory {
         }
 
         // Find the generalized index of the first page covering the address
-        let mut g_index = ((1u64 << 32) | address) >> page::PAGE_ADDRESS_SIZE as u64;
+        let mut g_index = ((1u64 << 32) | address as u64) >> page::PAGE_ADDRESS_SIZE;
         // Invalidate all nodes in the branch
         while g_index > 0 {
             self.nodes.insert(g_index, None);
@@ -236,7 +236,7 @@ impl Memory {
             anyhow::bail!("Unaligned memory access: {:x}", address);
         }
 
-        let page_index = address >> page::PAGE_ADDRESS_SIZE as u64;
+        let page_index = address as PageIndex >> page::PAGE_ADDRESS_SIZE as u64;
         let page_address = address as usize & page::PAGE_ADDRESS_MASK;
 
         // Attempt to look up the page.
@@ -271,7 +271,7 @@ impl Memory {
             anyhow::bail!("Unaligned memory access: {:x}", address);
         }
 
-        match self.page_lookup(address >> page::PAGE_ADDRESS_SIZE as u64) {
+        match self.page_lookup(address as u64 >> page::PAGE_ADDRESS_SIZE as u64) {
             Some(page) => {
                 let page_address = address as usize & page::PAGE_ADDRESS_MASK;
                 Ok(u32::from_be_bytes(
@@ -313,7 +313,7 @@ impl Memory {
         let mut address = address;
         let mut data = data;
         loop {
-            let page_index = address >> page::PAGE_ADDRESS_SIZE as u64;
+            let page_index = address as PageIndex >> page::PAGE_ADDRESS_SIZE as u64;
             let page_address = address as usize & page::PAGE_ADDRESS_MASK;
 
             let page = self
@@ -327,7 +327,7 @@ impl Memory {
                     if n == 0 {
                         return Ok(());
                     }
-                    address += n as u64;
+                    address += n as u32;
                 }
                 Err(e) => return Err(e.into()),
             };
@@ -338,11 +338,11 @@ impl Memory {
 pub struct MemoryReader {
     memory: Rc<RefCell<Memory>>,
     address: Address,
-    count: u64,
+    count: u32,
 }
 
 impl MemoryReader {
-    pub fn new(memory: Rc<RefCell<Memory>>, address: Address, count: u64) -> Self {
+    pub fn new(memory: Rc<RefCell<Memory>>, address: Address, count: u32) -> Self {
         Self {
             memory,
             address,
@@ -357,13 +357,13 @@ impl Read for MemoryReader {
             return Ok(0);
         }
 
-        let end_address = self.address + self.count;
+        let end_address = self.address + self.count as Address;
 
-        let page_index = self.address >> page::PAGE_ADDRESS_SIZE as u64;
+        let page_index = self.address as PageIndex >> page::PAGE_ADDRESS_SIZE as u64;
         let start = self.address as usize & page::PAGE_ADDRESS_MASK;
         let mut end = page::PAGE_SIZE;
 
-        if page_index == (end_address >> page::PAGE_ADDRESS_SIZE as u64) {
+        if page_index == (end_address as u64 >> page::PAGE_ADDRESS_SIZE as u64) {
             end = end_address as usize & page::PAGE_ADDRESS_MASK;
         }
         let n = end - start;
@@ -377,8 +377,8 @@ impl Read for MemoryReader {
                 std::io::copy(&mut vec![0; n].as_slice(), &mut buf)?;
             }
         };
-        self.address += n as u64;
-        self.count -= n as u64;
+        self.address += n as u32;
+        self.count -= n as u32;
         Ok(n)
     }
 }
@@ -578,7 +578,7 @@ mod test {
                 .expect("Should not error");
 
             let mut reader =
-                MemoryReader::new(Rc::clone(&memory), 0x1337 - 10, data.len() as u64 + 20);
+                MemoryReader::new(Rc::clone(&memory), 0x1337 - 10, data.len() as u32 + 20);
             let mut buf = Vec::with_capacity(1260);
             reader.read_to_end(&mut buf).unwrap();
 
