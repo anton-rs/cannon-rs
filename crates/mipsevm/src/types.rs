@@ -1,6 +1,6 @@
 //! This module contains all of the type aliases and enums used within this crate.
 
-/// A [Page] is a portion of memory of size [crate::page::PAGE_SIZE].
+/// A [Page] is a portion of memory of size `PAGE_SIZE`.
 pub type Page = [u8; crate::page::PAGE_SIZE];
 
 /// A [StateWitness] is an encoded commitment to the current [crate::State] of the MIPS emulator.
@@ -25,6 +25,7 @@ pub enum VMStatus {
     Unfinished = 3,
 }
 
+/// Identifiers for special file descriptors used by the MIPS emulator.
 #[repr(u8)]
 pub enum Fd {
     StdIn = 0,

@@ -8,6 +8,10 @@ use std::io::{BufWriter, Write};
 pub(crate) const MIPS_EBADF: u32 = 0x9;
 pub(crate) const MIPS_EINVAL: u32 = 0x16;
 
+/// The [InstrumentedState] is a wrapper around [State] that contains cached machine state,
+/// the input and output buffers, and an implementation of the MIPS VM.
+///
+/// To perform an instruction step on the MIPS emulator, use the [InstrumentedState::step] method.
 pub struct InstrumentedState<O: Write, E: Write, P: PreimageOracle> {
     /// The inner [State] of the MIPS thread context.
     pub(crate) state: State,

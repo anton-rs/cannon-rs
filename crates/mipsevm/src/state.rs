@@ -6,6 +6,10 @@ use crate::{witness::STATE_WITNESS_SIZE, Memory, StateWitness, VMStatus};
 use alloy_primitives::B256;
 use anyhow::Result;
 
+/// The [State] struct contains the internal model of the MIPS emulator state.
+///
+/// The [State] by itself does not contain functionality for performing instruction steps
+/// or executing the MIPS emulator. For this, use the [crate::InstrumentedState] struct.
 #[derive(Debug, Default)]
 pub struct State {
     /// The [Memory] of the emulated MIPS thread context.
@@ -18,13 +22,21 @@ pub struct State {
     pub pc: u32,
     /// The next program counter.
     pub next_pc: u32,
+    /// The lo register
     pub lo: u32,
+    /// The hi register
     pub hi: u32,
+    /// The heap pointer
     pub heap: u32,
+    /// The exit code of the MIPS emulator.
     pub exit_code: u8,
+    /// The exited status of the MIPS emulator.
     pub exited: bool,
+    /// The current step of the MIPS emulator.
     pub step: u64,
+    /// The MIPS emulator's registers.
     pub registers: [u32; 32],
+    /// The last hint sent to the host.
     pub last_hint: Vec<u8>,
 }
 
