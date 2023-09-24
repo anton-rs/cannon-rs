@@ -408,9 +408,11 @@ dependencies = [
  "once_cell",
  "preimage-oracle",
  "rand",
+ "rayon",
  "revm",
  "serde",
  "serde_json",
+ "tokio",
  "tracing",
 ]
 

@@ -8,25 +8,26 @@ use crate::{
 use alloy_primitives::B256;
 use anyhow::Result;
 use fnv::FnvHashMap;
-use std::{cell::RefCell, io::Read, rc::Rc};
+use std::{cell::RefCell, io::Read, rc::Rc, sync::Arc, thread};
+use tokio::sync::Mutex;
 
 /// The [Memory] struct represents the MIPS emulator's memory.
 #[derive(Debug)]
 pub struct Memory {
     /// Map of generalized index -> the merkle root of each index. None if invalidated.
-    nodes: FnvHashMap<Gindex, Option<B256>>,
+    nodes: Arc<Mutex<FnvHashMap<Gindex, Option<B256>>>>,
     /// Map of page indices to [CachedPage]s.
-    pages: FnvHashMap<PageIndex, Rc<RefCell<CachedPage>>>,
+    pages: Arc<Mutex<FnvHashMap<PageIndex, Arc<Mutex<CachedPage>>>>>,
     /// We store two caches upfront; we often read instructions from one page and reserve another
     /// for scratch memory. This prevents map lookups for each instruction.
-    last_page: [(PageIndex, Option<Rc<RefCell<CachedPage>>>); 2],
+    last_page: [(PageIndex, Option<Arc<Mutex<CachedPage>>>); 2],
 }
 
 impl Default for Memory {
     fn default() -> Self {
         Self {
-            nodes: FnvHashMap::default(),
-            pages: FnvHashMap::default(),
+            nodes: Default::default(),
+            pages: Default::default(),
             last_page: [(!0u64, None), (!0u64, None)],
         }
     }
@@ -35,16 +36,16 @@ impl Default for Memory {
 impl Memory {
     /// Returns the number of allocated pages in memory.
     pub fn page_count(&self) -> usize {
-        self.pages.len()
+        self.pages.blocking_lock().len()
     }
 
     /// Performs an operation on all pages in the memory.
     ///
     /// ### Takes
     /// - `f`: A function that takes a [PageIndex] and a shared reference to a [CachedPage].
-    pub fn for_each_page(&mut self, mut f: impl FnMut(PageIndex, Rc<RefCell<CachedPage>>)) {
-        self.pages.iter().for_each(|(key, page)| {
-            f(*key, Rc::clone(page));
+    pub fn for_each_page(&mut self, mut f: impl FnMut(PageIndex, Arc<Mutex<CachedPage>>)) {
+        self.pages.blocking_lock().iter().for_each(|(key, page)| {
+            f(*key, Arc::clone(page));
         });
     }
 
@@ -63,7 +64,7 @@ impl Memory {
         // Find the page and invalidate the address within it.
         match self.page_lookup(address as u64 >> page::PAGE_ADDRESS_SIZE) {
             Some(page) => {
-                let mut page = page.borrow_mut();
+                let mut page = page.blocking_lock();
                 let prev_valid = !page.is_valid(1);
 
                 // Invalidate the address within the page.
@@ -85,7 +86,7 @@ impl Memory {
         let mut g_index = ((1u64 << 32) | address as u64) >> page::PAGE_ADDRESS_SIZE;
         // Invalidate all nodes in the branch
         while g_index > 0 {
-            self.nodes.insert(g_index, None);
+            self.nodes.blocking_lock().insert(g_index, None);
             g_index >>= 1;
         }
 
@@ -100,60 +101,23 @@ impl Memory {
     ///
     /// ### Returns
     /// - A reference to the [CachedPage] if it exists.
-    pub fn page_lookup(&mut self, page_index: PageIndex) -> Option<Rc<RefCell<CachedPage>>> {
+    pub fn page_lookup(&mut self, page_index: PageIndex) -> Option<Arc<Mutex<CachedPage>>> {
         // Check caches before maps
         if let Some((_, Some(page))) = self.last_page.iter().find(|(key, _)| *key == page_index) {
-            Some(Rc::clone(page))
-        } else if let Some(page) = self.pages.get(&page_index) {
+            Some(Arc::clone(page))
+        } else if let Some(page) = self.pages.blocking_lock().get(&page_index) {
             // Cache the page
             self.last_page[1] = self.last_page[0].clone();
-            self.last_page[0] = (page_index, Some(Rc::clone(page)));
+            self.last_page[0] = (page_index, Some(Arc::clone(page)));
 
-            Some(Rc::clone(page))
+            Some(Arc::clone(page))
         } else {
             None
         }
     }
 
     pub fn merkleize_subtree(&mut self, g_index: Gindex) -> Result<B256> {
-        // Fetch the amount of bits required to represent the generalized index
-        let bits = 64 - g_index.leading_zeros();
-        if bits > 28 {
-            anyhow::bail!("Gindex is too deep")
-        }
-
-        if bits > page::PAGE_KEY_SIZE as u32 {
-            let depth_into_page = bits - 1 - page::PAGE_KEY_SIZE as u32;
-            let page_index = (g_index >> depth_into_page) & page::PAGE_KEY_MASK as u64;
-            return self.pages.get(&page_index).map_or(
-                Ok(page::ZERO_HASHES[28 - bits as usize]),
-                |page| {
-                    let page_g_index =
-                        (1 << depth_into_page) | (g_index & ((1 << depth_into_page) - 1));
-                    page.borrow_mut().merkleize_subtree(page_g_index)
-                },
-            );
-        }
-
-        if bits > page::PAGE_KEY_SIZE as u32 + 1 {
-            anyhow::bail!("Cannot jump into intermediate node of page")
-        }
-
-        if let Some(node) = self.nodes.get(&g_index) {
-            if let Some(node) = node {
-                return Ok(*node);
-            }
-        } else {
-            return Ok(page::ZERO_HASHES[28 - bits as usize]);
-        }
-
-        let left = self.merkleize_subtree(g_index << 1)?;
-        let right = self.merkleize_subtree((g_index << 1) | 1)?;
-        let result = keccak_concat_fixed(*left, *right);
-
-        self.nodes.insert(g_index, Some(result));
-
-        Ok(result)
+        Self::inner_merkleize(Arc::clone(&self.pages), Arc::clone(&self.nodes), g_index)
     }
 
     /// Compute the merkle root of the [Memory].
@@ -252,7 +216,7 @@ impl Memory {
             .unwrap_or_else(|| self.alloc_page(page_index))?;
 
         // Copy the 32 bit value into the page
-        page.borrow_mut().data[page_address..page_address + 4]
+        page.blocking_lock().data[page_address..page_address + 4]
             .copy_from_slice(&value.to_be_bytes());
 
         Ok(())
@@ -275,7 +239,7 @@ impl Memory {
             Some(page) => {
                 let page_address = address as usize & page::PAGE_ADDRESS_MASK;
                 Ok(u32::from_be_bytes(
-                    page.borrow().data[page_address..page_address + 4].try_into()?,
+                    page.blocking_lock().data[page_address..page_address + 4].try_into()?,
                 ))
             }
             None => Ok(0),
@@ -289,13 +253,15 @@ impl Memory {
     ///
     /// ### Returns
     /// - A reference to the allocated [CachedPage].
-    pub fn alloc_page(&mut self, page_index: PageIndex) -> Result<Rc<RefCell<CachedPage>>> {
-        let page = Rc::new(RefCell::new(CachedPage::default()));
-        self.pages.insert(page_index, Rc::clone(&page));
+    pub fn alloc_page(&mut self, page_index: PageIndex) -> Result<Arc<Mutex<CachedPage>>> {
+        let page = Arc::new(Mutex::new(CachedPage::default()));
+        self.pages
+            .blocking_lock()
+            .insert(page_index, Arc::clone(&page));
 
         let mut key = (1 << page::PAGE_KEY_SIZE) | page_index;
         while key > 0 {
-            self.nodes.insert(key, None);
+            self.nodes.blocking_lock().insert(key, None);
             key >>= 1;
         }
         Ok(page)
@@ -320,9 +286,10 @@ impl Memory {
                 .page_lookup(page_index)
                 .map(Ok)
                 .unwrap_or_else(|| self.alloc_page(page_index))?;
-            page.borrow_mut().invalidate_full();
+            let mut page = page.blocking_lock();
+            page.invalidate_full();
 
-            match data.read(&mut page.borrow_mut().data[page_address..]) {
+            match data.read(&mut page.data[page_address..]) {
                 Ok(n) => {
                     if n == 0 {
                         return Ok(());
@@ -332,6 +299,67 @@ impl Memory {
                 Err(e) => return Err(e.into()),
             };
         }
+    }
+
+    fn inner_merkleize(
+        pages: Arc<Mutex<FnvHashMap<PageIndex, Arc<Mutex<CachedPage>>>>>,
+        nodes: Arc<Mutex<FnvHashMap<Gindex, Option<B256>>>>,
+        g_index: Gindex,
+    ) -> Result<B256> {
+        // Fetch the amount of bits required to represent the generalized index
+        let bits = 64 - g_index.leading_zeros();
+        if bits > 28 {
+            anyhow::bail!("Gindex is too deep")
+        }
+
+        if bits > page::PAGE_KEY_SIZE as u32 {
+            let depth_into_page = bits - 1 - page::PAGE_KEY_SIZE as u32;
+            let page_index = (g_index >> depth_into_page) & page::PAGE_KEY_MASK as u64;
+            let pages = pages.blocking_lock();
+            return pages.get(&page_index).map_or(
+                Ok(page::ZERO_HASHES[28 - bits as usize]),
+                |page| {
+                    let page_g_index =
+                        (1 << depth_into_page) | (g_index & ((1 << depth_into_page) - 1));
+                    page.blocking_lock().merkleize_subtree(page_g_index)
+                },
+            );
+        }
+
+        if bits > page::PAGE_KEY_SIZE as u32 + 1 {
+            anyhow::bail!("Cannot jump into intermediate node of page")
+        }
+
+        if let Some(node) = nodes.blocking_lock().get(&g_index) {
+            if let Some(node) = node {
+                return Ok(*node);
+            }
+        } else {
+            return Ok(page::ZERO_HASHES[28 - bits as usize]);
+        }
+
+        // Only parallelize above a certain depth; The overhead isn't worth it for small trees
+        let (left, right) = if bits < 2 {
+            let nodes_clone = Arc::clone(&nodes);
+            let nodes_clone_b = Arc::clone(&nodes);
+            let pages_clone = Arc::clone(&pages);
+            let (left, right) = rayon::join(
+                move || Self::inner_merkleize(pages_clone, nodes_clone, g_index << 1),
+                move || Self::inner_merkleize(pages, nodes_clone_b, (g_index << 1) | 1),
+            );
+
+            (left?, right?)
+        } else {
+            let left = Self::inner_merkleize(Arc::clone(&pages), Arc::clone(&nodes), g_index << 1)?;
+            let right = Self::inner_merkleize(pages, Arc::clone(&nodes), (g_index << 1) | 1)?;
+            (left, right)
+        };
+
+        let result = keccak_concat_fixed(*left, *right);
+
+        nodes.blocking_lock().insert(g_index, Some(result));
+
+        Ok(result)
     }
 }
 
@@ -371,7 +399,10 @@ impl Read for MemoryReader {
         // less precise than `copy_from_slice`.
         match self.memory.borrow_mut().page_lookup(page_index) {
             Some(page) => {
-                std::io::copy(&mut page.borrow().data[start..end].as_ref(), &mut buf)?;
+                std::io::copy(
+                    &mut page.blocking_lock().data[start..end].as_ref(),
+                    &mut buf,
+                )?;
             }
             None => {
                 std::io::copy(&mut vec![0; n].as_slice(), &mut buf)?;
