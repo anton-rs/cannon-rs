@@ -279,7 +279,7 @@ mod test {
             if ins.state.exited {
                 break;
             }
-            ins.step(true).unwrap();
+            ins.step(false).unwrap();
         }
 
         assert!(ins.state.exited, "must exit");
