@@ -3,7 +3,6 @@
 use alloy_primitives::{keccak256, B256};
 
 /// Concatenate two fixed sized arrays together into a new array with minimal reallocation.
-#[inline(always)]
 pub(crate) fn concat_fixed<T, const N: usize, const M: usize>(a: [T; N], b: [T; M]) -> [T; N + M]
 where
     T: Copy + Default,
@@ -16,7 +15,6 @@ where
 }
 
 /// Hash the concatenation of two fixed sized arrays.
-#[inline(always)]
 pub(crate) fn keccak_concat_fixed<T, const N: usize, const M: usize>(a: [T; N], b: [T; M]) -> B256
 where
     T: Copy + Default,

@@ -149,7 +149,7 @@ impl Memory {
 
         let left = self.merkleize_subtree(g_index << 1)?;
         let right = self.merkleize_subtree((g_index << 1) | 1)?;
-        let result = keccak_concat_fixed(left.into(), right.into());
+        let result = keccak_concat_fixed(*left, *right);
 
         self.nodes.insert(g_index, Some(result));
 

@@ -14,7 +14,7 @@ pub(crate) const MIPS_EINVAL: u32 = 0x16;
 /// To perform an instruction step on the MIPS emulator, use the [InstrumentedState::step] method.
 pub struct InstrumentedState<O: Write, E: Write, P: PreimageOracle> {
     /// The inner [State] of the MIPS thread context.
-    pub(crate) state: State,
+    pub state: State,
     /// The MIPS thread context's stdout buffer.
     /// TODO(clabby): Prob not the best place for this.
     pub(crate) std_out: BufWriter<O>,
