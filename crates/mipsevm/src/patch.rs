@@ -50,7 +50,7 @@ pub fn load_elf(raw: &[u8]) -> Result<State> {
             continue;
         }
 
-        let section_data = elf.segment_data(&header)?;
+        let section_data = &elf.segment_data(&header)?[..header.p_filesz as usize];
         let mut reader: Box<dyn Read> = Box::new(section_data);
 
         if header.p_filesz != header.p_memsz {
@@ -106,7 +106,8 @@ pub fn load_elf(raw: &[u8]) -> Result<State> {
 /// ### Returns
 /// - `Ok(())` if the patch was successful
 /// - `Err(_)` if the patch failed
-pub fn patch_go(elf: ElfBytes<AnyEndian>, state: &State) -> Result<()> {
+pub fn patch_go(raw: &[u8], state: &State) -> Result<()> {
+    let elf = ElfBytes::<AnyEndian>::minimal_parse(raw)?;
     let (parsing_table, string_table) = elf
         .symbol_table()?
         .ok_or(anyhow::anyhow!("Failed to load ELF symbol table"))?;
@@ -116,9 +117,12 @@ pub fn patch_go(elf: ElfBytes<AnyEndian>, state: &State) -> Result<()> {
         let name = string_table.get(symbol_idx as usize)?;
 
         if GO_SYMBOLS.contains(&name) {
+            // MIPS32 patch: ret (pseudo instruction)
+            // 03e00008 = jr $ra = ret (pseudo instruction)
+            // 00000000 = nop (executes with delay-slot, but does nothing)
             state.memory.borrow_mut().set_memory_range(
                 symbol.st_value as u32,
-                [0x03, 0xe0, 0x00, 0x08, 0, 0, 0, 0].as_slice(),
+                [0x03, 0xe0, 0x00, 0x08, 0x00, 0x00, 0x00, 0x00].as_slice(),
             )?;
         } else if name == "runtime.MemProfileRate" {
             // disable mem profiling, to avoid a lot of unnecessary floating point ops
@@ -146,7 +150,7 @@ pub fn patch_stack(state: &mut State) -> Result<()> {
     // Allocate 1 page for the initial stack data, and 16KB = 4 pages for the stack to grow.
     state.memory.borrow_mut().set_memory_range(
         ptr - 4 * page::PAGE_SIZE as u32,
-        [0; page::PAGE_SIZE * 5].as_slice(),
+        [0u8; page::PAGE_SIZE * 5].as_slice(),
     )?;
     state.registers[29] = ptr;
 
@@ -175,7 +179,7 @@ pub fn patch_stack(state: &mut State) -> Result<()> {
 }
 
 /// A multi reader is a reader that reads from the first reader until it returns 0, then reads from the second reader.
-struct MultiReader<R1: Read, R2: Read>(R1, R2);
+pub struct MultiReader<R1: Read, R2: Read>(R1, R2);
 
 impl<R1: Read, R2: Read> Read for MultiReader<R1, R2> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {

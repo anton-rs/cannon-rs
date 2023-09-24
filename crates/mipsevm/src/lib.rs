@@ -28,7 +28,7 @@ mod mips;
 pub use mips::InstrumentedState;
 
 mod patch;
-pub use patch::{load_elf, patch_go, patch_stack};
+pub use patch::{load_elf, patch_go, patch_stack, MultiReader};
 
 #[cfg(test)]
 mod test_utils;

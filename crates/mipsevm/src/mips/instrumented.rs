@@ -105,19 +105,23 @@ where
 
 #[cfg(test)]
 mod test {
-    use crate::test_utils::StaticOracle;
+    use alloy_primitives::keccak256;
+
+    use crate::test_utils::{ClaimTestOracle, BASE_ADDR_END, END_ADDR};
+    use crate::witness::STATE_WITNESS_SIZE;
+    use crate::{load_elf, patch, StateWitnessHasher};
+    use crate::{test_utils::StaticOracle, Address, InstrumentedState, Memory, State};
+    use std::io::BufWriter;
+    use std::{
+        cell::RefCell,
+        fs,
+        io::{self, BufReader},
+        path::PathBuf,
+        rc::Rc,
+    };
 
     mod open_mips {
         use super::*;
-        use crate::test_utils::{BASE_ADDR_END, END_ADDR};
-        use crate::{Address, InstrumentedState, Memory, State};
-        use std::{
-            cell::RefCell,
-            fs,
-            io::{self, BufReader},
-            path::PathBuf,
-            rc::Rc,
-        };
 
         #[test]
         fn open_mips_tests() {
@@ -186,5 +190,115 @@ mod test {
                 }
             }
         }
+    }
+
+    #[test]
+    fn state_hash() {
+        let cases = [
+            (false, 0),
+            (false, 1),
+            (false, 2),
+            (false, 3),
+            (true, 0),
+            (true, 1),
+            (true, 2),
+            (true, 3),
+        ];
+
+        for (exited, exit_code) in cases.into_iter() {
+            let mut state = State {
+                exited,
+                exit_code,
+                ..Default::default()
+            };
+
+            let actual_witness = state.encode_witness().unwrap();
+            let actual_state_hash = actual_witness.state_hash();
+            assert_eq!(actual_witness.len(), STATE_WITNESS_SIZE);
+
+            let mut expected_witness = [0u8; STATE_WITNESS_SIZE];
+            let mem_root = state.memory.borrow_mut().merkle_root().unwrap();
+            expected_witness[..32].copy_from_slice(mem_root.as_slice());
+            expected_witness[32 * 2 + 4 * 6] = exit_code;
+            expected_witness[32 * 2 + 4 * 6 + 1] = exited as u8;
+
+            assert_eq!(actual_witness, expected_witness, "Incorrect witness");
+
+            let mut expected_state_hash = keccak256(&expected_witness);
+            expected_state_hash[0] = State::vm_status(exited, exit_code) as u8;
+            assert_eq!(
+                actual_state_hash, expected_state_hash,
+                "Incorrect state hash"
+            );
+        }
+    }
+
+    #[test]
+    fn test_hello() {
+        let elf_bytes = include_bytes!("../../../../example/bin/hello.elf");
+        let mut state = load_elf(elf_bytes).unwrap();
+        patch::patch_go(elf_bytes, &state).unwrap();
+        patch::patch_stack(&mut state).unwrap();
+
+        let out = BufWriter::new(Vec::default());
+        let err = BufWriter::new(Vec::default());
+        let mut ins =
+            InstrumentedState::new(state, StaticOracle::new(b"hello world".to_vec()), out, err);
+
+        for _ in 0..400_000 {
+            if ins.state.exited {
+                break;
+            }
+            ins.step(false).unwrap();
+        }
+
+        assert!(ins.state.exited, "must exit");
+        assert_eq!(ins.state.exit_code, 0, "must exit with 0");
+
+        assert_eq!(
+            String::from_utf8(ins.std_out.buffer().to_vec()).unwrap(),
+            "hello world!\n"
+        );
+        assert_eq!(
+            String::from_utf8(ins.std_err.buffer().to_vec()).unwrap(),
+            ""
+        );
+    }
+
+    #[test]
+    fn test_claim() {
+        let elf_bytes = include_bytes!("../../../../example/bin/claim.elf");
+        let mut state = load_elf(elf_bytes).unwrap();
+        patch::patch_go(elf_bytes, &state).unwrap();
+        patch::patch_stack(&mut state).unwrap();
+
+        let out = BufWriter::new(Vec::default());
+        let err = BufWriter::new(Vec::default());
+        let mut ins = InstrumentedState::new(state, ClaimTestOracle::default(), out, err);
+
+        for _ in 0..2_000_000 {
+            if ins.state.exited {
+                break;
+            }
+            ins.step(false).unwrap();
+        }
+
+        assert!(ins.state.exited, "must exit");
+        assert_eq!(ins.state.exit_code, 0, "must exit with 0");
+
+        assert_eq!(
+            String::from_utf8(ins.std_out.buffer().to_vec()).unwrap(),
+            format!(
+                "computing {} * {} + {}\nclaim {} is good!\n",
+                ClaimTestOracle::S,
+                ClaimTestOracle::A,
+                ClaimTestOracle::B,
+                ClaimTestOracle::S * ClaimTestOracle::A + ClaimTestOracle::B
+            )
+        );
+        assert_eq!(
+            String::from_utf8(ins.std_err.buffer().to_vec()).unwrap(),
+            "started!"
+        );
     }
 }

@@ -331,6 +331,7 @@ where
                                 break;
                             }
                         }
+                        v0 = a2;
                     }
                     Ok(Fd::PreimageWrite) => {
                         let effective_address = a1 & 0xFFFFFFFC;
