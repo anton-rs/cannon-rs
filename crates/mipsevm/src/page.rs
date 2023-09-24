@@ -96,34 +96,71 @@ impl CachedPage {
             if self.is_valid(j) {
                 continue;
             }
-            self.cache[j] = *keccak_concat_fixed(self.cache[i], self.cache[i + 1]);
+            let (a, b) = self.cache.split_at_mut(i);
+            a[j] = *keccak_concat_fixed(b[0], b[1]);
             self.set_valid(j, true);
         }
 
         self.cache[1].into()
     }
 
+    /// Fill the cache with the merkleized subtree who's root is the passed generalized index.
+    ///
+    /// ### Takes
+    /// - `g_index`: The generalized index of the subtree to merkleize.
+    ///
+    /// ### Returns
+    /// - The 32 byte merkle root hash of the subtree.
+    fn fill_cache(&mut self, g_index: usize) -> B256 {
+        if self.is_valid(g_index) {
+            return self.cache[g_index].into();
+        }
+
+        let hash = if g_index >= PAGE_SIZE_WORDS >> 1 {
+            // This is a leaf node.
+            let data_idx = (g_index - (PAGE_SIZE_WORDS >> 1)) << 6;
+            keccak256(&self.data[data_idx..data_idx + 64])
+        } else {
+            // This is an internal node.
+            let left_child = g_index << 1;
+            let right_child = left_child + 1;
+
+            // Ensure children are hashed.
+            self.fill_cache(left_child);
+            self.fill_cache(right_child);
+
+            keccak_concat_fixed(self.cache[left_child], self.cache[right_child])
+        };
+        self.set_valid(g_index, true);
+        self.cache[g_index] = *hash;
+        hash
+    }
+
+    /// Compute the merkle root for the subtree rooted at the given generalized index.
+    ///
+    /// ### Takes
+    /// - `g_index`: The generalized index of the subtree to merkleize.
+    ///
+    /// ### Returns
+    /// - A [Result] containing the 32 byte merkle root hash of the subtree or an error if the
+    ///  generalized index is too deep.
     pub fn merkleize_subtree(&mut self, g_index: Gindex) -> Result<B256> {
-        // Fill the cache by computing the merkle root.
-        let _ = self.merkle_root();
-
-        if g_index >= PAGE_SIZE_WORDS as u64 {
-            if g_index >= (PAGE_SIZE_WORDS * 2) as u64 {
-                anyhow::bail!("Generalized index is too deep: {}", g_index);
-            }
-
+        if (PAGE_SIZE_WORDS..PAGE_SIZE_WORDS * 2).contains(&(g_index as usize)) {
             let node_index = g_index as usize & (PAGE_ADDRESS_MASK >> 5);
             let start = node_index << 5;
             return Ok(B256::from_slice(&self.data[start..start + 32]));
+        } else if g_index as usize >= PAGE_SIZE_WORDS * 2 {
+            anyhow::bail!("Generalized index is too deep: {}", g_index);
         }
 
-        Ok(self.cache[g_index as usize].into())
+        Ok(self.fill_cache(g_index as usize))
     }
 
     /// Check if a key is valid within the bitmap.
     ///
     /// ### Takes
     /// - `key`: The key to check.
+    #[inline(always)]
     pub fn is_valid(&self, key: usize) -> bool {
         let flag = 1 << (127 - key);
         self.valid & flag == flag
@@ -134,6 +171,7 @@ impl CachedPage {
     /// ### Takes
     /// - `key`: The key to set.
     /// - `valid`: Whether the key should be set as valid or invalid.
+    #[inline(always)]
     pub fn set_valid(&mut self, key: usize, valid: bool) {
         let flag_offset = 127 - key;
         self.valid &= !(1 << flag_offset);

@@ -171,17 +171,32 @@ impl Memory {
     ///
     /// ### Returns
     /// - The 896 bit merkle proof for the given address.
-    pub fn merkle_proof(&mut self, address: Address) -> Result<[u8; 28 << 5]> {
+    pub fn merkle_proof(&mut self, address: Address) -> Result<[u8; 28 * 32]> {
         let proof = self.traverse_branch(1, address, 0)?;
-        let mut proof_out = [0u8; 28 << 5];
 
-        // Encode the proof
-        (0..28).for_each(|i| {
-            let start = i << 5;
-            proof_out[start..start + 32].copy_from_slice(proof[i].as_slice());
-        });
+        // Ensure that the proof has the expected length
+        if proof.len() != 28 {
+            anyhow::bail!("Proof has unexpected length")
+        }
 
-        Ok(proof_out)
+        // Convert the Vec into a boxed slice
+        let boxed_slice: Box<[B256]> = proof.into_boxed_slice();
+
+        // Convert the boxed slice into a raw pointer
+        let raw = Box::into_raw(boxed_slice);
+
+        // Reinterpret the raw pointer as a pointer to [u8; 28 * 32]
+        let result_array_ptr = raw as *mut [u8; 28 * 32];
+
+        // Dereference the pointer to get the [u8; 28 * 32]
+        //
+        // SAFETY: This is safe because the memory layout of [[u8; 32]; 28] and
+        //         [u8; 28 * 32] are the same. We've asserted that the length of
+        //         the boxed slice of [u8; 32]s is 28 above, so there is no risk
+        //         of reading out of bounds or undefined behavior.
+        let result_array = unsafe { *result_array_ptr };
+
+        Ok(result_array)
     }
 
     /// Traverse a branch of the merkle tree, generating a proof for the given address.
