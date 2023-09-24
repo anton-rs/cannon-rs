@@ -34,10 +34,12 @@ pub(crate) const GO_SYMBOLS: [&str; 14] = [
 pub fn load_elf(raw: &[u8]) -> Result<State> {
     let elf = ElfBytes::<AnyEndian>::minimal_parse(raw)?;
 
-    let mut state = State::default();
-    state.pc = elf.ehdr.e_entry as u32;
-    state.next_pc = elf.ehdr.e_entry as u32 + 4;
-    state.heap = 0x20000000;
+    let state = State {
+        pc: elf.ehdr.e_entry as u32,
+        next_pc: elf.ehdr.e_entry as u32 + 4,
+        heap: 0x20000000,
+        ..Default::default()
+    };
 
     let headers = elf
         .segments()
@@ -104,7 +106,7 @@ pub fn load_elf(raw: &[u8]) -> Result<State> {
 /// ### Returns
 /// - `Ok(())` if the patch was successful
 /// - `Err(_)` if the patch failed
-pub fn patch_go(elf: ElfBytes<AnyEndian>, state: &mut State) -> Result<()> {
+pub fn patch_go(elf: ElfBytes<AnyEndian>, state: &State) -> Result<()> {
     let (parsing_table, string_table) = elf
         .symbol_table()?
         .ok_or(anyhow::anyhow!("Failed to load ELF symbol table"))?;
@@ -139,7 +141,7 @@ pub fn patch_go(elf: ElfBytes<AnyEndian>, state: &mut State) -> Result<()> {
 /// - `Err(_)` if the patch failed
 pub fn patch_stack(state: &mut State) -> Result<()> {
     // Setup stack pointer
-    let ptr = 0x7F_FF_D0_00 as u32;
+    let ptr = 0x7F_FF_D0_00_u32;
 
     // Allocate 1 page for the initial stack data, and 16KB = 4 pages for the stack to grow.
     state.memory.borrow_mut().set_memory_range(
@@ -149,12 +151,12 @@ pub fn patch_stack(state: &mut State) -> Result<()> {
     state.registers[29] = ptr;
 
     #[inline(always)]
-    fn store_mem(st: &mut State, address: Address, value: u32) -> Result<()> {
+    fn store_mem(st: &State, address: Address, value: u32) -> Result<()> {
         st.memory.borrow_mut().set_memory(address, value)
     }
 
     // init argc, argv, aux on stack
-    store_mem(state, ptr + 4 * 1, 0x42)?; // argc = 0 (argument count)
+    store_mem(state, ptr + 4, 0x42)?; // argc = 0 (argument count)
     store_mem(state, ptr + 4 * 2, 0x35)?; // argv[n] = 0 (terminating argv)
     store_mem(state, ptr + 4 * 3, 0)?; // envp[term] = 0 (no env vars)
     store_mem(state, ptr + 4 * 4, 6)?; // auxv[0] = _AT_PAGESZ = 6 (key)
