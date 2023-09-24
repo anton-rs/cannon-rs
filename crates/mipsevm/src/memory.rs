@@ -5,7 +5,6 @@ use crate::{
     utils::keccak_concat_fixed,
     Address, Gindex, PageIndex,
 };
-use alloy_primitives::B256;
 use anyhow::Result;
 use fnv::FnvHashMap;
 use std::{cell::RefCell, io::Read, rc::Rc};
@@ -14,7 +13,7 @@ use std::{cell::RefCell, io::Read, rc::Rc};
 #[derive(Debug)]
 pub struct Memory {
     /// Map of generalized index -> the merkle root of each index. None if invalidated.
-    nodes: FnvHashMap<Gindex, Option<B256>>,
+    nodes: FnvHashMap<Gindex, Option<[u8; 32]>>,
     /// Map of page indices to [CachedPage]s.
     pages: FnvHashMap<PageIndex, Rc<RefCell<CachedPage>>>,
     /// We store two caches upfront; we often read instructions from one page and reserve another
@@ -115,7 +114,7 @@ impl Memory {
         }
     }
 
-    pub fn merkleize_subtree(&mut self, g_index: Gindex) -> Result<B256> {
+    pub fn merkleize_subtree(&mut self, g_index: Gindex) -> Result<[u8; 32]> {
         // Fetch the amount of bits required to represent the generalized index
         let bits = 64 - g_index.leading_zeros();
         if bits > 28 {
@@ -149,7 +148,7 @@ impl Memory {
 
         let left = self.merkleize_subtree(g_index << 1)?;
         let right = self.merkleize_subtree((g_index << 1) | 1)?;
-        let result = keccak_concat_fixed(*left, *right);
+        let result = *keccak_concat_fixed(left, right);
 
         self.nodes.insert(g_index, Some(result));
 
@@ -160,7 +159,7 @@ impl Memory {
     ///
     /// ### Returns
     /// - The 32 byte merkle root hash of the [Memory].
-    pub fn merkle_root(&mut self) -> Result<B256> {
+    pub fn merkle_root(&mut self) -> Result<[u8; 32]> {
         self.merkleize_subtree(1)
     }
 
@@ -180,7 +179,7 @@ impl Memory {
         }
 
         // Convert the Vec into a boxed slice
-        let boxed_slice: Box<[B256]> = proof.into_boxed_slice();
+        let boxed_slice: Box<[[u8; 32]]> = proof.into_boxed_slice();
 
         // Convert the boxed slice into a raw pointer
         let raw = Box::into_raw(boxed_slice);
@@ -213,7 +212,7 @@ impl Memory {
         parent: Gindex,
         address: Address,
         depth: u8,
-    ) -> Result<Vec<B256>> {
+    ) -> Result<Vec<[u8; 32]>> {
         if depth == 32 - 5 {
             let mut proof = Vec::with_capacity(32 - 5 + 1);
             proof.push(self.merkleize_subtree(parent)?);
@@ -402,7 +401,6 @@ impl Read for MemoryReader {
 mod test {
     use super::Memory;
     use crate::{memory::Address, page, utils::keccak_concat_fixed};
-    use alloy_primitives::B256;
 
     mod merkle_proof {
         use super::*;
@@ -428,14 +426,14 @@ mod test {
             let root = memory.merkle_root().unwrap();
             let proof = memory.merkle_proof(0x80004).unwrap();
             assert_eq!([0x00, 0x00, 0x00, 0x2a], proof[4..8]);
-            let mut node: B256 = proof[..32].try_into().unwrap();
+            let mut node = proof[..32].try_into().unwrap();
             let mut path = 0x80004 >> 5;
             (32..proof.len()).step_by(32).for_each(|i| {
-                let sib: B256 = proof[i..i + 32].try_into().unwrap();
+                let sib: [u8; 32] = proof[i..i + 32].try_into().unwrap();
                 if path & 1 != 0 {
-                    node = keccak_concat_fixed(sib.into(), node.into());
+                    node = *keccak_concat_fixed(sib, node);
                 } else {
-                    node = keccak_concat_fixed(node.into(), sib.into());
+                    node = *keccak_concat_fixed(node, sib);
                 }
                 path >>= 1;
             });

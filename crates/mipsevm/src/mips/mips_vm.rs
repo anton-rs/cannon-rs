@@ -7,7 +7,6 @@ use crate::{
     types::Syscall,
     Address, Fd, InstrumentedState, PreimageOracle,
 };
-use alloy_primitives::B256;
 use anyhow::Result;
 use std::{
     io::{self, Cursor, Read, Write},
@@ -29,7 +28,11 @@ where
     /// ### Returns
     /// - `Ok((data, data_len))`: The preimage data and length.
     /// - `Err(_)`: An error occurred while fetching the preimage.
-    pub(crate) fn read_preimage(&mut self, key: B256, offset: u32) -> Result<(B256, usize)> {
+    pub(crate) fn read_preimage(
+        &mut self,
+        key: [u8; 32],
+        offset: u32,
+    ) -> Result<([u8; 32], usize)> {
         if key != self.last_preimage_key {
             let data = self.preimage_oracle.get(key)?;
             self.last_preimage_key = key;
@@ -45,7 +48,7 @@ where
 
         // TODO(clabby): This could be problematic if the `Cursor`'s read function returns
         // 0 as EOF rather than the amount of bytes read into `data`.
-        let mut data = B256::ZERO;
+        let mut data = [0u8; 32];
         let data_len =
             Cursor::new(&self.last_preimage[offset as usize..]).read(data.as_mut_slice())?;
         Ok((data, data_len))

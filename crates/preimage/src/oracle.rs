@@ -1,7 +1,6 @@
 //! This module contains the [Client] struct and its implementation.
 
 use crate::{Oracle, PreimageGetter};
-use alloy_primitives::B256;
 use anyhow::Result;
 use std::sync::mpsc::{Receiver, Sender};
 
@@ -51,7 +50,7 @@ impl OracleServer {
 
 impl OracleServer {
     pub fn new_preimage_request(&mut self, getter: PreimageGetter) -> Result<()> {
-        let key = B256::from_slice(self.rx.recv()?.as_slice());
+        let key = self.rx.recv()?.as_slice().try_into()?;
 
         let value = getter(key)?;
 
@@ -68,7 +67,7 @@ impl OracleServer {
 mod test {
     use super::{Oracle, OracleClient, OracleServer};
     use crate::{Keccak256Key, Key};
-    use alloy_primitives::{keccak256, B256};
+    use alloy_primitives::keccak256;
     use std::{collections::HashMap, sync::Arc};
     use tokio::sync::Mutex;
 
@@ -79,15 +78,15 @@ mod test {
         let client = Arc::new(Mutex::new(OracleClient::new(ar, aw)));
         let server = Arc::new(Mutex::new(OracleServer::new(br, bw)));
 
-        let mut preimage_by_hash: HashMap<B256, Vec<u8>> = Default::default();
+        let mut preimage_by_hash: HashMap<[u8; 32], Vec<u8>> = Default::default();
         for preimage in preimages.iter() {
-            let k = keccak256(preimage) as Keccak256Key;
+            let k = *keccak256(preimage) as Keccak256Key;
             preimage_by_hash.insert(k.preimage_key(), preimage.clone());
         }
         let preimage_by_hash = Arc::new(preimage_by_hash);
 
         for preimage in preimages.into_iter() {
-            let k = keccak256(preimage) as Keccak256Key;
+            let k = *keccak256(preimage) as Keccak256Key;
 
             let client = Arc::clone(&client);
             let preimage_by_hash_a = Arc::clone(&preimage_by_hash);
@@ -109,7 +108,7 @@ mod test {
                 // Lock the server
                 let mut server = server.lock().await;
                 server
-                    .new_preimage_request(Box::new(move |key: B256| {
+                    .new_preimage_request(Box::new(move |key: [u8; 32]| {
                         let dat = preimage_by_hash_b.get(&key).unwrap();
                         Ok(dat.clone())
                     }))

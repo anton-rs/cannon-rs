@@ -1,7 +1,6 @@
 //! This module contains the [InstrumentedState] definition.
 
 use crate::{traits::PreimageOracle, Address, State, StepWitness};
-use alloy_primitives::B256;
 use anyhow::Result;
 use std::io::{BufWriter, Write};
 
@@ -32,7 +31,7 @@ pub struct InstrumentedState<O: Write, E: Write, P: PreimageOracle> {
     /// Cached pre-image data, including 8 byte length prefix
     pub(crate) last_preimage: Vec<u8>,
     /// Key for the above preimage
-    pub(crate) last_preimage_key: B256,
+    pub(crate) last_preimage_key: [u8; 32],
     /// The offset we last read from, or max u32 if nothing is read at
     /// the current step.
     pub(crate) last_preimage_offset: u32,
@@ -51,10 +50,10 @@ where
             std_err: BufWriter::new(std_err),
             last_mem_access: 0,
             mem_proof_enabled: false,
-            mem_proof: [0; 28 * 32],
+            mem_proof: [0u8; 28 * 32],
             preimage_oracle: oracle,
             last_preimage: Vec::default(),
-            last_preimage_key: B256::default(),
+            last_preimage_key: [0u8; 32],
             last_preimage_offset: 0,
         }
     }
@@ -79,7 +78,7 @@ where
             witness = Some(StepWitness {
                 state: self.state.encode_witness()?,
                 mem_proof: instruction_proof.to_vec(),
-                preimage_key: B256::ZERO,
+                preimage_key: [0u8; 32],
                 preimage_value: Vec::default(),
                 preimage_offset: 0,
             })
@@ -280,7 +279,7 @@ mod test {
             if ins.state.exited {
                 break;
             }
-            ins.step(false).unwrap();
+            ins.step(true).unwrap();
         }
 
         assert!(ins.state.exited, "must exit");
