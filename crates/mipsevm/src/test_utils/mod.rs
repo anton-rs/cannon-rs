@@ -1,7 +1,7 @@
 //! Testing utilities.
 
 use crate::{utils::concat_fixed, PreimageOracle};
-use alloy_primitives::{hex, keccak256, B256};
+use alloy_primitives::{hex, keccak256};
 use preimage_oracle::{Keccak256Key, Key, LocalIndexKey};
 use revm::primitives::HashMap;
 
@@ -29,7 +29,7 @@ impl PreimageOracle for StaticOracle {
         // noop
     }
 
-    fn get(&self, key: B256) -> anyhow::Result<&[u8]> {
+    fn get(&self, key: [u8; 32]) -> anyhow::Result<&[u8]> {
         if key != (key as Keccak256Key).preimage_key() {
             anyhow::bail!("Invalid preimage ")
         }
@@ -38,7 +38,7 @@ impl PreimageOracle for StaticOracle {
 }
 
 pub struct ClaimTestOracle {
-    images: HashMap<B256, Vec<u8>>,
+    images: HashMap<[u8; 32], Vec<u8>>,
 }
 
 impl ClaimTestOracle {
@@ -53,12 +53,12 @@ impl ClaimTestOracle {
         )
     }
 
-    pub fn pre_hash() -> B256 {
-        keccak256(Self::S.to_be_bytes())
+    pub fn pre_hash() -> [u8; 32] {
+        *keccak256(Self::S.to_be_bytes())
     }
 
-    pub fn diff_hash() -> B256 {
-        keccak256(Self::diff().as_slice())
+    pub fn diff_hash() -> [u8; 32] {
+        *keccak256(Self::diff().as_slice())
     }
 }
 
@@ -94,7 +94,7 @@ impl PreimageOracle for ClaimTestOracle {
 
         let part = hex::decode(parts[1]).unwrap();
         assert_eq!(part.len(), 32);
-        let hash = B256::from_slice(&part);
+        let hash: [u8; 32] = part.try_into().unwrap();
 
         match parts[0] {
             "fetch-state" => {
@@ -120,11 +120,11 @@ impl PreimageOracle for ClaimTestOracle {
                     Self::diff().to_vec(),
                 );
                 self.images.insert(
-                    (keccak256(Self::A.to_be_bytes()) as Keccak256Key).preimage_key(),
+                    (*keccak256(Self::A.to_be_bytes()) as Keccak256Key).preimage_key(),
                     Self::A.to_be_bytes().to_vec(),
                 );
                 self.images.insert(
-                    (keccak256(Self::B.to_be_bytes()) as Keccak256Key).preimage_key(),
+                    (*keccak256(Self::B.to_be_bytes()) as Keccak256Key).preimage_key(),
                     Self::B.to_be_bytes().to_vec(),
                 );
             }
@@ -132,7 +132,7 @@ impl PreimageOracle for ClaimTestOracle {
         }
     }
 
-    fn get(&self, key: B256) -> anyhow::Result<&[u8]> {
+    fn get(&self, key: [u8; 32]) -> anyhow::Result<&[u8]> {
         Ok(self
             .images
             .get(&key)

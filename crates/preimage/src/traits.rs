@@ -1,13 +1,12 @@
 //! This module contains the traits for the preimage-oracle crate.
 
-use alloy_primitives::B256;
 use anyhow::Result;
 
 /// The [Key] trait describes the behavior of a pre-image key that may be wrapped
 /// into a 32-byte type-prefixed key.
 pub trait Key {
     /// Changes the [Key] commitment into a 32-byte type-prefixed preimage key.
-    fn preimage_key(self) -> B256;
+    fn preimage_key(self) -> [u8; 32];
 }
 
 /// The [Oracle] trait describes the behavior of a read-only pre-image oracle.

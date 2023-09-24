@@ -1,13 +1,12 @@
 //! This module contains the various traits used in this crate.
 
-use alloy_primitives::B256;
 use anyhow::Result;
 
 /// A [StateWitnessHasher] is a trait describing the functionality of a type
 /// that computes a witness hash.
 pub trait StateWitnessHasher {
     /// Compute the [crate::StateWitness] hash.
-    fn state_hash(&self) -> B256;
+    fn state_hash(&self) -> [u8; 32];
 }
 
 /// A [PreimageOracle] is a trait describing the functionality of a preimage
@@ -28,5 +27,5 @@ pub trait PreimageOracle {
     /// - `Ok(Some(preimage))`: The preimage for the given key.
     /// - `Ok(None)`: The preimage for the given key does not exist.
     /// - `Err(_)`: An error occurred while fetching the preimage.
-    fn get(&self, key: B256) -> Result<&[u8]>;
+    fn get(&self, key: [u8; 32]) -> Result<&[u8]>;
 }

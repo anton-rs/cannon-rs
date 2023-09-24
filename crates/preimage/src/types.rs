@@ -1,17 +1,16 @@
 //! This module contains the types for the preimage-oracle crate.
 
 use crate::Key;
-use alloy_primitives::B256;
 use anyhow::Result;
 
 /// A [PreimageGetter] is a function that can be used to fetch pre-images.
-pub type PreimageGetter = Box<dyn Fn(B256) -> Result<Vec<u8>>>;
+pub type PreimageGetter = Box<dyn Fn([u8; 32]) -> Result<Vec<u8>>>;
 
 /// A [HintHandler] is a function that can be used to handle hints from a [crate::HintWriter].
 pub type HintHandler = Box<dyn Fn(&[u8]) -> Result<()>>;
 
 /// A [Keccak256Key] wraps a keccak256 hash to use it as a typed pre-image key.
-pub type Keccak256Key = B256;
+pub type Keccak256Key = [u8; 32];
 
 /// A [LocalIndexKey] is a key local to the program, indexing a special program input.
 pub type LocalIndexKey = u64;
@@ -37,8 +36,8 @@ impl From<u8> for KeyType {
 }
 
 impl Key for LocalIndexKey {
-    fn preimage_key(self) -> B256 {
-        let mut out = B256::ZERO;
+    fn preimage_key(self) -> [u8; 32] {
+        let mut out = [0u8; 32];
         out[0] = KeyType::Local as u8;
         out[24..].copy_from_slice(&self.to_be_bytes());
         out
@@ -46,7 +45,7 @@ impl Key for LocalIndexKey {
 }
 
 impl Key for Keccak256Key {
-    fn preimage_key(mut self) -> B256 {
+    fn preimage_key(mut self) -> [u8; 32] {
         self[0] = KeyType::GlobalKeccak as u8;
         self
     }

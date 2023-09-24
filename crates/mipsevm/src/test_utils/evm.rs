@@ -116,7 +116,7 @@ impl MipsEVM<CacheDB<EmptyDB>> {
             crate::debug!(
                 target: "mipsevm::evm",
                 "Reading preimage key {:x} at offset {}",
-                witness.preimage_key,
+                B256::from(witness.preimage_key),
                 witness.preimage_offset
             );
 
@@ -165,7 +165,7 @@ impl MipsEVM<CacheDB<EmptyDB>> {
                 anyhow::bail!(
                     "Post-state hash does not match state hash in log: {:x} != {:x}",
                     output,
-                    post_state.state_hash()
+                    B256::from(post_state.state_hash())
                 );
             }
 
@@ -447,7 +447,7 @@ mod test {
             let step_witness = StepWitness {
                 state: initial_state.encode_witness().unwrap(),
                 mem_proof: instruction_proof.to_vec(),
-                preimage_key: alloy_primitives::B256::ZERO,
+                preimage_key: [0u8; 32],
                 preimage_value: Vec::default(),
                 preimage_offset: 0,
             };

@@ -9,13 +9,13 @@ use preimage_oracle::KeyType;
 pub(crate) const STATE_WITNESS_SIZE: usize = 226;
 
 impl StateWitnessHasher for StateWitness {
-    fn state_hash(&self) -> B256 {
+    fn state_hash(&self) -> [u8; 32] {
         let mut hash = keccak256(self);
         let offset = 32 * 2 + 4 * 6;
         let exit_code = self[offset];
         let exited = self[offset + 1] == 1;
         hash[0] = State::vm_status(exited, exit_code) as u8;
-        hash
+        *hash
     }
 }
 
@@ -28,7 +28,7 @@ pub struct StepWitness {
     /// The proof of memory access
     pub mem_proof: Vec<u8>,
     /// The preimage key
-    pub preimage_key: B256,
+    pub preimage_key: [u8; 32],
     /// The preimage value
     pub preimage_value: Vec<u8>,
     /// The preimage offset
@@ -61,7 +61,7 @@ sol! {
 impl StepWitness {
     /// Returns `true` if the step witness has a preimage.
     pub fn has_preimage(&self) -> bool {
-        self.preimage_key != B256::ZERO
+        self.preimage_key != [0u8; 32]
     }
 
     /// ABI encodes the input to the preimage oracle, if the [StepWitness] has a preimage request.
@@ -70,7 +70,7 @@ impl StepWitness {
     /// - `Some(input)` if the [StepWitness] has a preimage request.
     /// - `None` if the [StepWitness] does not have a preimage request.
     pub fn encode_preimage_oracle_input(&self) -> Option<Bytes> {
-        if self.preimage_key == B256::ZERO {
+        if self.preimage_key == [0u8; 32] {
             crate::error!(target: "mipsevm::step_witness", "Cannot encode preimage oracle input without preimage key");
             return None;
         }
@@ -82,7 +82,7 @@ impl StepWitness {
             }
             KeyType::Local => {
                 if self.preimage_value.len() > 32 + 8 {
-                    crate::error!(target: "mipsevm::step_witness", "Local preimage value exceeds maximum size of 32 bytes with key 0x{:x}", self.preimage_key);
+                    crate::error!(target: "mipsevm::step_witness", "Local preimage value exceeds maximum size of 32 bytes with key 0x{:x}", B256::from(self.preimage_key));
                     return None;
                 }
 
@@ -91,7 +91,7 @@ impl StepWitness {
                 tmp[0..preimage_part.len()].copy_from_slice(preimage_part);
 
                 let call = loadLocalDataCall {
-                    _0: self.preimage_key.into(),
+                    _0: B256::from(self.preimage_key).into(),
                     _1: tmp,
                     _2: U256::from(self.preimage_value.len() - 8),
                     _3: U256::from(self.preimage_offset),

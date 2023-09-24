@@ -3,7 +3,6 @@
 use std::{cell::RefCell, rc::Rc};
 
 use crate::{witness::STATE_WITNESS_SIZE, Memory, StateWitness, VMStatus};
-use alloy_primitives::B256;
 use anyhow::Result;
 
 /// The [State] struct contains the internal model of the MIPS emulator state.
@@ -15,7 +14,7 @@ pub struct State {
     /// The [Memory] of the emulated MIPS thread context.
     pub memory: Rc<RefCell<Memory>>,
     /// The preimage key for the given state.
-    pub preimage_key: B256,
+    pub preimage_key: [u8; 32],
     /// The preimage offset.
     pub preimage_offset: u32,
     /// The current program counter.

@@ -1,7 +1,7 @@
 //! This module contains the data structure for a [Page] within the MIPS emulator's [Memory].
 
 use crate::{utils::keccak_concat_fixed, Address, Gindex, Page};
-use alloy_primitives::{keccak256, B256};
+use alloy_primitives::keccak256;
 use anyhow::Result;
 use once_cell::sync::Lazy;
 
@@ -14,10 +14,10 @@ pub(crate) const MAX_PAGE_COUNT: usize = 1 << PAGE_KEY_SIZE;
 pub(crate) const PAGE_KEY_MASK: usize = MAX_PAGE_COUNT - 1;
 
 /// Precomputed hashes of each full-zero range sub-tree level.
-pub(crate) static ZERO_HASHES: Lazy<[B256; 256]> = Lazy::new(|| {
-    let mut out = [B256::ZERO; 256];
+pub(crate) static ZERO_HASHES: Lazy<[[u8; 32]; 256]> = Lazy::new(|| {
+    let mut out = [[0u8; 32]; 256];
     for i in 1..256 {
-        out[i] = keccak_concat_fixed(out[i - 1].into(), out[i - 1].into())
+        out[i] = *keccak_concat_fixed(out[i - 1], out[i - 1])
     }
     out
 });
@@ -78,7 +78,7 @@ impl CachedPage {
     ///
     /// ## Returns
     /// - The 32 byte merkle root hash of the [Page].
-    pub fn merkle_root(&mut self) -> B256 {
+    pub fn merkle_root(&mut self) -> [u8; 32] {
         // First, hash the bottom layer.
         for i in (0..PAGE_SIZE).step_by(64) {
             let j = (PAGE_SIZE_WORDS >> 1) + (i >> 6);
@@ -101,7 +101,7 @@ impl CachedPage {
             self.set_valid(j, true);
         }
 
-        self.cache[1].into()
+        self.cache[1]
     }
 
     /// Fill the cache with the merkleized subtree who's root is the passed generalized index.
@@ -111,15 +111,15 @@ impl CachedPage {
     ///
     /// ### Returns
     /// - The 32 byte merkle root hash of the subtree.
-    fn fill_cache(&mut self, g_index: usize) -> B256 {
+    fn fill_cache(&mut self, g_index: usize) -> [u8; 32] {
         if self.is_valid(g_index) {
-            return self.cache[g_index].into();
+            return self.cache[g_index];
         }
 
         let hash = if g_index >= PAGE_SIZE_WORDS >> 1 {
             // This is a leaf node.
             let data_idx = (g_index - (PAGE_SIZE_WORDS >> 1)) << 6;
-            keccak256(&self.data[data_idx..data_idx + 64])
+            *keccak256(&self.data[data_idx..data_idx + 64])
         } else {
             // This is an internal node.
             let left_child = g_index << 1;
@@ -129,10 +129,10 @@ impl CachedPage {
             self.fill_cache(left_child);
             self.fill_cache(right_child);
 
-            keccak_concat_fixed(self.cache[left_child], self.cache[right_child])
+            *keccak_concat_fixed(self.cache[left_child], self.cache[right_child])
         };
         self.set_valid(g_index, true);
-        self.cache[g_index] = *hash;
+        self.cache[g_index] = hash;
         hash
     }
 
@@ -144,11 +144,11 @@ impl CachedPage {
     /// ### Returns
     /// - A [Result] containing the 32 byte merkle root hash of the subtree or an error if the
     ///  generalized index is too deep.
-    pub fn merkleize_subtree(&mut self, g_index: Gindex) -> Result<B256> {
+    pub fn merkleize_subtree(&mut self, g_index: Gindex) -> Result<[u8; 32]> {
         if (PAGE_SIZE_WORDS..PAGE_SIZE_WORDS * 2).contains(&(g_index as usize)) {
             let node_index = g_index as usize & (PAGE_ADDRESS_MASK >> 5);
             let start = node_index << 5;
-            return Ok(B256::from_slice(&self.data[start..start + 32]));
+            return Ok(self.data[start..start + 32].try_into()?);
         } else if g_index as usize >= PAGE_SIZE_WORDS * 2 {
             anyhow::bail!("Generalized index is too deep: {}", g_index);
         }
@@ -190,7 +190,7 @@ mod test {
 
         let g_index = ((1 << PAGE_ADDRESS_SIZE) | 42) >> 5;
         let node = page.merkleize_subtree(g_index).unwrap();
-        let mut expected_leaf = B256::ZERO;
+        let mut expected_leaf = [0u8; 32];
         expected_leaf[10] = 0xab;
         assert_eq!(node, expected_leaf, "Leaf nodes should not be hashed");
 
