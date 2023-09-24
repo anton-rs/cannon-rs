@@ -106,7 +106,8 @@ pub fn load_elf(raw: &[u8]) -> Result<State> {
 /// ### Returns
 /// - `Ok(())` if the patch was successful
 /// - `Err(_)` if the patch failed
-pub fn patch_go(elf: ElfBytes<AnyEndian>, state: &State) -> Result<()> {
+pub fn patch_go(raw: &[u8], state: &State) -> Result<()> {
+    let elf = ElfBytes::<AnyEndian>::minimal_parse(raw)?;
     let (parsing_table, string_table) = elf
         .symbol_table()?
         .ok_or(anyhow::anyhow!("Failed to load ELF symbol table"))?;

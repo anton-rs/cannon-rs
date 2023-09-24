@@ -214,9 +214,11 @@ impl MipsEVM<CacheDB<EmptyDB>> {
 mod test {
     use super::*;
     use crate::{
-        test_utils::{StaticOracle, BASE_ADDR_END, END_ADDR},
+        patch,
+        test_utils::{ClaimTestOracle, StaticOracle, BASE_ADDR_END, END_ADDR},
         Address, InstrumentedState, Memory, State,
     };
+    use elf::{endian::AnyEndian, ElfBytes};
     use revm::primitives::ExecutionResult;
     use std::{
         cell::RefCell,
@@ -446,5 +448,94 @@ mod test {
             };
             assert!(mips_evm.step(step_witness).is_err());
         }
+    }
+
+    #[test]
+    fn test_hello_evm() {
+        let mut mips_evm = MipsEVM::new();
+        mips_evm.try_init().unwrap();
+
+        let elf_bytes = include_bytes!("../../../../example/bin/hello.elf");
+        let mut state = patch::load_elf(elf_bytes).unwrap();
+        patch::patch_go(elf_bytes, &mut state).unwrap();
+        patch::patch_stack(&mut state).unwrap();
+
+        let mut instrumented =
+            InstrumentedState::new(state, StaticOracle::default(), io::stdout(), io::stderr());
+
+        for i in 0..400_000 {
+            if instrumented.state.exited {
+                break;
+            }
+
+            if i % 1000 == 0 {
+                let instruction = instrumented
+                    .state
+                    .memory
+                    .borrow_mut()
+                    .get_memory(instrumented.state.pc as Address)
+                    .unwrap();
+                println!(
+                    "step: {} pc: 0x{:08x} instruction: {:08x}",
+                    instrumented.state.step, instrumented.state.pc, instruction
+                );
+            }
+
+            let step_witness = instrumented.step(true).unwrap().unwrap();
+
+            let evm_post = mips_evm.step(step_witness).unwrap();
+            let rust_post = instrumented.state.encode_witness().unwrap();
+            assert_eq!(evm_post, rust_post);
+        }
+
+        assert!(instrumented.state.exited, "Must complete program");
+        assert_eq!(instrumented.state.exit_code, 0, "Must exit with 0");
+    }
+
+    #[test]
+    #[ignore]
+    fn test_claim_evm() {
+        let mut mips_evm = MipsEVM::new();
+        mips_evm.try_init().unwrap();
+
+        let elf_bytes = include_bytes!("../../../../example/bin/claim.elf");
+        let mut state = patch::load_elf(elf_bytes).unwrap();
+        patch::patch_go(elf_bytes, &mut state).unwrap();
+        patch::patch_stack(&mut state).unwrap();
+
+        let mut instrumented = InstrumentedState::new(
+            state,
+            ClaimTestOracle::default(),
+            io::stdout(),
+            io::stderr(),
+        );
+
+        for i in 0..2_000_000 {
+            if instrumented.state.exited {
+                break;
+            }
+
+            if i % 1000 == 0 {
+                let instruction = instrumented
+                    .state
+                    .memory
+                    .borrow_mut()
+                    .get_memory(instrumented.state.pc as Address)
+                    .unwrap();
+                println!(
+                    "step: {} pc: 0x{:08x} instruction: {:08x}",
+                    instrumented.state.step, instrumented.state.pc, instruction
+                );
+            }
+
+            let step_witness = instrumented.step(true).unwrap().unwrap();
+
+            let evm_post = mips_evm.step(step_witness).unwrap();
+            let rust_post = instrumented.state.encode_witness().unwrap();
+            assert_eq!(evm_post, rust_post);
+        }
+
+        assert!(instrumented.state.exited, "Must complete program");
+        assert_eq!(instrumented.state.exit_code, 0, "Must exit with 0");
     }
 }
