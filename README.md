@@ -56,14 +56,14 @@ credits for the original idea and reference implementation of this concept go to
 ### `cannon-mipsevm` benchmarks
 
 The below benchmark was ran on a 2021 Macbook Pro with an M1 Max and 32 GB of unified memory
-on commit [`83e4c56`](https://github.com/anton-rs/cannon-rs/tree/83e4c5643193aac19046ef29b5018137b5eb05f2).
+on commit [`71b68d5`](https://github.com/anton-rs/cannon-rs/pull/17/commits/71b68d52fb858cfc544c1430b482aeaef460552e).
 
 | Benchmark Name             | `cannon` mean (Reference) | `cannon-rs` mean    |
 |----------------------------|---------------------------|---------------------|
-| Memory Merkle Root (25MB)  | 736.94 ms                 | 328.67 µs (-99%)    |
-| Memory Merkle Root (50MB)  | 1.54s                     | 548.85 ms (-63.36%) |
-| Memory Merkle Root (100MB) | 3.34s                     | 1.16s (-65.29%)     |
-| Memory Merkle Root (200MB) | 6.30s                     | 2.14s (-66.01%)     |
+| Memory Merkle Root (25MB)  | 736.94 ms                 | 29.58 µs (-99%)     |
+| Memory Merkle Root (50MB)  | 1.54s                     | 7.25 ms (-99%)      |
+| Memory Merkle Root (100MB) | 3.34s                     | 273.76 ms (-91.8%)  |
+| Memory Merkle Root (200MB) | 6.30s                     | 1.65s (-73.81%)     |
 
 *todo - execution benchmarks*
 
