@@ -3,7 +3,10 @@ use criterion::{criterion_group, criterion_main, Criterion};
 use rand::RngCore;
 
 fn merkle_root(c: &mut Criterion) {
-    c.bench_function("Merkle Root (memory size = 25 MB)", |b| {
+    let mut g = c.benchmark_group("memory");
+    g.sample_size(10);
+
+    g.bench_function("Merkle Root (memory size = 25 MB)", |b| {
         let mut memory = Memory::default();
         let mut data = vec![0u8; 25_000_000];
         rand::thread_rng().fill_bytes(&mut data[..]);
@@ -15,7 +18,7 @@ fn merkle_root(c: &mut Criterion) {
         });
     });
 
-    c.bench_function("Merkle Root (memory size = 50 MB)", |b| {
+    g.bench_function("Merkle Root (memory size = 50 MB)", |b| {
         let mut memory = Memory::default();
         let mut data = vec![0u8; 50_000_000];
         rand::thread_rng().fill_bytes(&mut data[..]);
@@ -27,7 +30,7 @@ fn merkle_root(c: &mut Criterion) {
         });
     });
 
-    c.bench_function("Merkle Root (memory size = 100 MB)", |b| {
+    g.bench_function("Merkle Root (memory size = 100 MB)", |b| {
         let mut memory = Memory::default();
         let mut data = vec![0u8; 100_000_000];
         rand::thread_rng().fill_bytes(&mut data[..]);
@@ -39,7 +42,7 @@ fn merkle_root(c: &mut Criterion) {
         });
     });
 
-    c.bench_function("Merkle Root (memory size = 200 MB)", |b| {
+    g.bench_function("Merkle Root (memory size = 200 MB)", |b| {
         let mut memory = Memory::default();
         let mut data = vec![0u8; 200_000_000];
         rand::thread_rng().fill_bytes(&mut data[..]);
