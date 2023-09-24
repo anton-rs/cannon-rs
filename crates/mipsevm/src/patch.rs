@@ -119,7 +119,7 @@ pub fn patch_go(raw: &[u8], state: &State) -> Result<()> {
         if GO_SYMBOLS.contains(&name) {
             state.memory.borrow_mut().set_memory_range(
                 symbol.st_value as u32,
-                [0x03, 0xe0, 0x00, 0x08, 0, 0, 0, 0].as_slice(),
+                [0x03, 0xe0, 0x00, 0x08, 0x00, 0x00, 0x00, 0x00].as_slice(),
             )?;
         } else if name == "runtime.MemProfileRate" {
             // disable mem profiling, to avoid a lot of unnecessary floating point ops

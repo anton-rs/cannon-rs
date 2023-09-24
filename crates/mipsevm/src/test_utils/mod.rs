@@ -43,9 +43,9 @@ pub struct ClaimTestOracle {
 }
 
 impl ClaimTestOracle {
-    const S: u64 = 1000;
-    const A: u64 = 3;
-    const B: u64 = 4;
+    pub(crate) const S: u64 = 1000;
+    pub(crate) const A: u64 = 3;
+    pub(crate) const B: u64 = 4;
     const DIFF: Lazy<[u8; 64]> = Lazy::new(|| {
         concat_fixed(
             keccak256(Self::A.to_be_bytes()).into(),
