@@ -31,6 +31,12 @@ pub struct MipsEVM<DB: Database> {
     pub inner: EVM<DB>,
 }
 
+impl Default for MipsEVM<CacheDB<EmptyDB>> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MipsEVM<CacheDB<EmptyDB>> {
     /// Creates a new MIPS EVM with an in-memory backend.
     pub fn new() -> Self {

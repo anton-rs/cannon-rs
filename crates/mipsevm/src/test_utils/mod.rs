@@ -2,7 +2,6 @@
 
 use crate::{utils::concat_fixed, PreimageOracle};
 use alloy_primitives::{hex, keccak256, B256};
-use once_cell::sync::Lazy;
 use preimage_oracle::{Keccak256Key, Key, LocalIndexKey};
 use revm::primitives::HashMap;
 
@@ -46,14 +45,21 @@ impl ClaimTestOracle {
     pub(crate) const S: u64 = 1000;
     pub(crate) const A: u64 = 3;
     pub(crate) const B: u64 = 4;
-    const DIFF: Lazy<[u8; 64]> = Lazy::new(|| {
+
+    pub fn diff() -> [u8; 64] {
         concat_fixed(
             keccak256(Self::A.to_be_bytes()).into(),
             keccak256(Self::B.to_be_bytes()).into(),
         )
-    });
-    const PRE_HASH: Lazy<B256> = Lazy::new(|| keccak256(Self::S.to_be_bytes()));
-    const DIFF_HASH: Lazy<B256> = Lazy::new(|| keccak256(Self::DIFF.as_slice()));
+    }
+
+    pub fn pre_hash() -> B256 {
+        keccak256(Self::S.to_be_bytes())
+    }
+
+    pub fn diff_hash() -> B256 {
+        keccak256(Self::diff().as_slice())
+    }
 }
 
 impl Default for ClaimTestOracle {
@@ -62,11 +68,13 @@ impl Default for ClaimTestOracle {
             images: HashMap::new(),
         };
 
-        s.images
-            .insert((0 as LocalIndexKey).preimage_key(), Self::PRE_HASH.to_vec());
+        s.images.insert(
+            (0 as LocalIndexKey).preimage_key(),
+            Self::pre_hash().to_vec(),
+        );
         s.images.insert(
             (1 as LocalIndexKey).preimage_key(),
-            Self::DIFF_HASH.to_vec(),
+            Self::diff_hash().to_vec(),
         );
         s.images.insert(
             (2 as LocalIndexKey).preimage_key(),
@@ -80,7 +88,7 @@ impl Default for ClaimTestOracle {
 impl PreimageOracle for ClaimTestOracle {
     fn hint(&mut self, value: &[u8]) {
         let s = String::from_utf8(value.to_vec()).unwrap();
-        let parts: Vec<&str> = s.split(" ").collect();
+        let parts: Vec<&str> = s.split(' ').collect();
 
         assert_eq!(parts.len(), 2);
 
@@ -92,24 +100,24 @@ impl PreimageOracle for ClaimTestOracle {
             "fetch-state" => {
                 assert_eq!(
                     hash,
-                    *Self::PRE_HASH,
+                    Self::pre_hash(),
                     "Expecting request for pre-state preimage"
                 );
 
                 self.images.insert(
-                    (*Self::PRE_HASH as Keccak256Key).preimage_key(),
+                    (Self::pre_hash() as Keccak256Key).preimage_key(),
                     Self::S.to_be_bytes().to_vec(),
                 );
             }
             "fetch-diff" => {
                 assert_eq!(
                     hash,
-                    *Self::DIFF_HASH,
+                    Self::diff_hash(),
                     "Expecting request for diff preimage"
                 );
                 self.images.insert(
-                    (*Self::DIFF_HASH as Keccak256Key).preimage_key(),
-                    Self::DIFF.to_vec(),
+                    (Self::diff_hash() as Keccak256Key).preimage_key(),
+                    Self::diff().to_vec(),
                 );
                 self.images.insert(
                     (keccak256(Self::A.to_be_bytes()) as Keccak256Key).preimage_key(),
