@@ -48,13 +48,13 @@ impl Default for StepWitness {
 }
 
 sol! {
-    // `PreimageOracle` loadLocalData function.
+    /// `PreimageOracle` loadLocalData function.
     function loadLocalData(uint256,bytes32,uint256,uint256) external returns (bytes32);
 
-    // `PreimageOracle` loadKeccak256PreimagePart function.
+    /// `PreimageOracle` loadKeccak256PreimagePart function.
     function loadKeccak256PreimagePart(uint256,bytes) external;
 
-    // `MIPS` step function.
+    /// `MIPS` step function.
     function step(bytes,bytes) external returns (bytes32);
 }
 

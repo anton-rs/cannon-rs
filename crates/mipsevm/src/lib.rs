@@ -27,5 +27,8 @@ pub use types::{Address, Fd, Gindex, Page, PageIndex, StateWitness, VMStatus};
 mod mips;
 pub use mips::InstrumentedState;
 
+mod patch;
+pub use patch::{load_elf, patch_go, patch_stack};
+
 #[cfg(test)]
 mod test_utils;
