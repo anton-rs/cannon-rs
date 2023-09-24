@@ -218,12 +218,11 @@ mod test {
         test_utils::{ClaimTestOracle, StaticOracle, BASE_ADDR_END, END_ADDR},
         Address, InstrumentedState, Memory, State,
     };
-    use elf::{endian::AnyEndian, ElfBytes};
     use revm::primitives::ExecutionResult;
     use std::{
         cell::RefCell,
         fs,
-        io::{self, BufReader},
+        io::{self, BufReader, BufWriter},
         path::PathBuf,
         rc::Rc,
     };
@@ -493,7 +492,6 @@ mod test {
     }
 
     #[test]
-    #[ignore]
     fn test_claim_evm() {
         let mut mips_evm = MipsEVM::new();
         mips_evm.try_init().unwrap();
@@ -503,12 +501,11 @@ mod test {
         patch::patch_go(elf_bytes, &mut state).unwrap();
         patch::patch_stack(&mut state).unwrap();
 
-        let mut instrumented = InstrumentedState::new(
-            state,
-            ClaimTestOracle::default(),
-            io::stdout(),
-            io::stderr(),
-        );
+        let out_buf = BufWriter::new(Vec::default());
+        let err_buf = BufWriter::new(Vec::default());
+
+        let mut instrumented =
+            InstrumentedState::new(state, ClaimTestOracle::default(), out_buf, err_buf);
 
         for i in 0..2_000_000 {
             if instrumented.state.exited {
@@ -537,5 +534,20 @@ mod test {
 
         assert!(instrumented.state.exited, "Must complete program");
         assert_eq!(instrumented.state.exit_code, 0, "Must exit with 0");
+
+        assert_eq!(
+            String::from_utf8(instrumented.std_out.buffer().to_vec()).unwrap(),
+            format!(
+                "computing {} * {} + {}\nclaim {} is good!\n",
+                ClaimTestOracle::S,
+                ClaimTestOracle::A,
+                ClaimTestOracle::B,
+                ClaimTestOracle::S * ClaimTestOracle::A + ClaimTestOracle::B
+            )
+        );
+        assert_eq!(
+            String::from_utf8(instrumented.std_err.buffer().to_vec()).unwrap(),
+            "started!"
+        );
     }
 }

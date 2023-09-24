@@ -266,7 +266,6 @@ mod test {
     }
 
     #[test]
-    #[ignore]
     fn test_claim() {
         let elf_bytes = include_bytes!("../../../../example/bin/claim.elf");
         let mut state = load_elf(elf_bytes).unwrap();
