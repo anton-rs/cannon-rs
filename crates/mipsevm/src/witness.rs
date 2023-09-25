@@ -28,18 +28,18 @@ pub struct StepWitness {
     /// The proof of memory access
     pub mem_proof: Vec<u8>,
     /// The preimage key
-    pub preimage_key: [u8; 32],
+    pub preimage_key: Option<[u8; 32]>,
     /// The preimage value
-    pub preimage_value: Vec<u8>,
+    pub preimage_value: Option<Vec<u8>>,
     /// The preimage offset
-    pub preimage_offset: u32,
+    pub preimage_offset: Option<u32>,
 }
 
 impl Default for StepWitness {
     fn default() -> Self {
         Self {
             state: [0u8; crate::witness::STATE_WITNESS_SIZE],
-            mem_proof: Default::default(),
+            mem_proof: Vec::with_capacity(28 * 32 * 2),
             preimage_key: Default::default(),
             preimage_value: Default::default(),
             preimage_offset: Default::default(),
@@ -61,7 +61,7 @@ sol! {
 impl StepWitness {
     /// Returns `true` if the step witness has a preimage.
     pub fn has_preimage(&self) -> bool {
-        self.preimage_key != [0u8; 32]
+        self.preimage_key.is_some()
     }
 
     /// ABI encodes the input to the preimage oracle, if the [StepWitness] has a preimage request.
@@ -70,39 +70,41 @@ impl StepWitness {
     /// - `Some(input)` if the [StepWitness] has a preimage request.
     /// - `None` if the [StepWitness] does not have a preimage request.
     pub fn encode_preimage_oracle_input(&self) -> Option<Bytes> {
-        if self.preimage_key == [0u8; 32] {
+        let Some(preimage_key) = self.preimage_key else {
             crate::error!(target: "mipsevm::step_witness", "Cannot encode preimage oracle input without preimage key");
             return None;
-        }
+        };
 
-        match KeyType::from(self.preimage_key[0]) {
+        match KeyType::from(preimage_key[0]) {
             KeyType::_Illegal => {
                 crate::error!(target: "mipsevm::step_witness", "Illegal key type");
                 None
             }
             KeyType::Local => {
-                if self.preimage_value.len() > 32 + 8 {
-                    crate::error!(target: "mipsevm::step_witness", "Local preimage value exceeds maximum size of 32 bytes with key 0x{:x}", B256::from(self.preimage_key));
+                let preimage_value = &self.preimage_value.clone()?;
+
+                if preimage_value.len() > 32 + 8 {
+                    crate::error!(target: "mipsevm::step_witness", "Local preimage value exceeds maximum size of 32 bytes with key 0x{:x}", B256::from(self.preimage_key?));
                     return None;
                 }
 
-                let preimage_part = &self.preimage_value[8..];
+                let preimage_part = &preimage_value[8..];
                 let mut tmp = [0u8; 32];
                 tmp[0..preimage_part.len()].copy_from_slice(preimage_part);
 
                 let call = loadLocalDataCall {
-                    _0: B256::from(self.preimage_key).into(),
+                    _0: B256::from(preimage_key).into(),
                     _1: tmp,
-                    _2: U256::from(self.preimage_value.len() - 8),
-                    _3: U256::from(self.preimage_offset),
+                    _2: U256::from(preimage_value.len() - 8),
+                    _3: U256::from(self.preimage_offset?),
                 };
 
                 Some(call.encode().into())
             }
             KeyType::GlobalKeccak => {
                 let call = loadKeccak256PreimagePartCall {
-                    _0: U256::from(self.preimage_offset),
-                    _1: self.preimage_value[8..].into(),
+                    _0: U256::from(self.preimage_offset?),
+                    _1: self.preimage_value.clone()?[8..].to_vec(),
                 };
 
                 Some(call.encode().into())
@@ -117,7 +119,7 @@ impl StepWitness {
     pub fn encode_step_input(&self) -> Bytes {
         let call = stepCall {
             _0: self.state.to_vec(),
-            _1: self.mem_proof.clone(),
+            _1: self.mem_proof.to_vec(),
         };
 
         call.encode().into()

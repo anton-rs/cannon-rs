@@ -75,12 +75,13 @@ where
                 .memory
                 .borrow_mut()
                 .merkle_proof(self.state.pc as Address)?;
+
+            let mut mem_proof = vec![0; 28 * 32 * 2];
+            mem_proof[0..28 * 32].copy_from_slice(instruction_proof.as_slice());
             witness = Some(StepWitness {
                 state: self.state.encode_witness()?,
-                mem_proof: instruction_proof.to_vec(),
-                preimage_key: [0u8; 32],
-                preimage_value: Vec::default(),
-                preimage_offset: 0,
+                mem_proof,
+                ..Default::default()
             })
         }
 
@@ -88,11 +89,11 @@ where
 
         if proof {
             witness = witness.map(|mut wit| {
-                wit.mem_proof.extend_from_slice(self.mem_proof.as_slice());
+                wit.mem_proof[28 * 32..].copy_from_slice(self.mem_proof.as_slice());
                 if self.last_preimage_offset != u32::MAX {
-                    wit.preimage_key = self.last_preimage_key;
-                    wit.preimage_value = self.last_preimage.clone();
-                    wit.preimage_offset = self.last_preimage_offset;
+                    wit.preimage_key = Some(self.last_preimage_key);
+                    wit.preimage_value = Some(self.last_preimage.clone());
+                    wit.preimage_offset = Some(self.last_preimage_offset);
                 }
                 wit
             })
