@@ -12,6 +12,7 @@
   </a>
   <img src="https://img.shields.io/badge/License-MIT-green.svg?label=license" alt="License">
   <a href="https://github.com/ethereum-optimism/monorepo"><img src="https://img.shields.io/badge/OP%20Stack-monorepo-red" alt="OP Stack"></a>
+  <a href="https://t.me/+2yfSX0YikWMxNTRh"><img src="https://img.shields.io/badge/Telegram-x?logo=telegram&label=anton-rs%20contributors"></a>
 </p>
 
 <p align="center">
