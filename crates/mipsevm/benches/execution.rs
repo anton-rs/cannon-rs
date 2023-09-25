@@ -13,7 +13,7 @@ fn bench_exec(
     b: &mut Bencher,
 ) {
     let mut state = load_elf(elf_bytes).unwrap();
-    patch_go(elf_bytes, &state).unwrap();
+    patch_go(elf_bytes, &mut state).unwrap();
     patch_stack(&mut state).unwrap();
 
     let out = BufWriter::new(Vec::default());

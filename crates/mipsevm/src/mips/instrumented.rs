@@ -70,11 +70,7 @@ where
 
         let mut witness = None;
         if proof {
-            let instruction_proof = self
-                .state
-                .memory
-                .borrow_mut()
-                .merkle_proof(self.state.pc as Address)?;
+            let instruction_proof = self.state.memory.merkle_proof(self.state.pc as Address)?;
 
             let mut mem_proof = vec![0; 28 * 32 * 2];
             mem_proof[0..28 * 32].copy_from_slice(instruction_proof.as_slice());
@@ -113,11 +109,9 @@ mod test {
     use crate::{test_utils::StaticOracle, Address, InstrumentedState, Memory, State};
     use std::io::BufWriter;
     use std::{
-        cell::RefCell,
         fs,
         io::{self, BufReader},
         path::PathBuf,
-        rc::Rc,
     };
 
     mod open_mips {
@@ -144,12 +138,11 @@ mod test {
                         let mut state = State::default();
                         state.pc = 0;
                         state.next_pc = 4;
-                        state.memory = Rc::new(RefCell::new(Memory::default()));
+                        state.memory = Memory::default();
                         state
                     };
                     state
                         .memory
-                        .borrow_mut()
                         .set_memory_range(0, BufReader::new(program_mem.as_slice()))
                         .unwrap();
 
@@ -179,7 +172,7 @@ mod test {
                         assert_eq!(1, ins.state.exit_code, "must exit with 1");
                     } else {
                         assert_eq!(END_ADDR, ins.state.pc, "must reach end");
-                        let mut state = ins.state.memory.borrow_mut();
+                        let mut state = ins.state.memory;
                         let (done, result) = (
                             state.get_memory((BASE_ADDR_END + 4) as Address).unwrap(),
                             state.get_memory((BASE_ADDR_END + 8) as Address).unwrap(),
@@ -217,7 +210,7 @@ mod test {
             assert_eq!(actual_witness.len(), STATE_WITNESS_SIZE);
 
             let mut expected_witness = [0u8; STATE_WITNESS_SIZE];
-            let mem_root = state.memory.borrow_mut().merkle_root().unwrap();
+            let mem_root = state.memory.merkle_root().unwrap();
             expected_witness[..32].copy_from_slice(mem_root.as_slice());
             expected_witness[32 * 2 + 4 * 6] = exit_code;
             expected_witness[32 * 2 + 4 * 6 + 1] = exited as u8;
@@ -237,7 +230,7 @@ mod test {
     fn test_hello() {
         let elf_bytes = include_bytes!("../../../../example/bin/hello.elf");
         let mut state = load_elf(elf_bytes).unwrap();
-        patch::patch_go(elf_bytes, &state).unwrap();
+        patch::patch_go(elf_bytes, &mut state).unwrap();
         patch::patch_stack(&mut state).unwrap();
 
         let out = BufWriter::new(Vec::default());
@@ -269,7 +262,7 @@ mod test {
     fn test_claim() {
         let elf_bytes = include_bytes!("../../../../example/bin/claim.elf");
         let mut state = load_elf(elf_bytes).unwrap();
-        patch::patch_go(elf_bytes, &state).unwrap();
+        patch::patch_go(elf_bytes, &mut state).unwrap();
         patch::patch_stack(&mut state).unwrap();
 
         let out = BufWriter::new(Vec::default());

@@ -8,10 +8,7 @@ use crate::{
     Address, Fd, InstrumentedState, PreimageOracle,
 };
 use anyhow::Result;
-use std::{
-    io::{self, Cursor, Read, Write},
-    rc::Rc,
-};
+use std::io::{self, Cursor, Read, Write};
 
 impl<O, E, P> InstrumentedState<O, E, P>
 where
@@ -68,11 +65,7 @@ where
             }
 
             self.last_mem_access = effective_address;
-            self.mem_proof = self
-                .state
-                .memory
-                .borrow_mut()
-                .merkle_proof(effective_address)?;
+            self.mem_proof = self.state.memory.merkle_proof(effective_address)?;
         }
         Ok(())
     }
@@ -89,11 +82,7 @@ where
         self.state.step += 1;
 
         // Fetch the instruction
-        let instruction = self
-            .state
-            .memory
-            .borrow_mut()
-            .get_memory(self.state.pc as Address)?;
+        let instruction = self.state.memory.get_memory(self.state.pc as Address)?;
         let opcode = instruction >> 26;
 
         // j-type j/jal
@@ -148,11 +137,7 @@ where
             let address = rs & 0xFFFFFFFC;
             self.track_mem_access(address as Address)?;
 
-            mem = self
-                .state
-                .memory
-                .borrow_mut()
-                .get_memory(address as Address)?;
+            mem = self.state.memory.get_memory(address as Address)?;
             if opcode >= 0x28 && opcode != 0x30 {
                 // Store
                 store_address = address;
@@ -201,7 +186,6 @@ where
             self.track_mem_access(store_address as Address)?;
             self.state
                 .memory
-                .borrow_mut()
                 .set_memory(store_address as Address, val)?;
         }
 
@@ -262,11 +246,7 @@ where
                         let effective_address = (a1 & 0xFFFFFFFC) as Address;
 
                         self.track_mem_access(effective_address)?;
-                        let memory = self
-                            .state
-                            .memory
-                            .borrow_mut()
-                            .get_memory(effective_address)?;
+                        let memory = self.state.memory.get_memory(effective_address)?;
 
                         let (data, mut data_len) = self
                             .read_preimage(self.state.preimage_key, self.state.preimage_offset)?;
@@ -284,7 +264,6 @@ where
                         out_mem[alignment..alignment + data_len].copy_from_slice(&data[..data_len]);
                         self.state
                             .memory
-                            .borrow_mut()
                             .set_memory(effective_address, u32::from_be_bytes(out_mem))?;
                         self.state.preimage_offset += data_len as u32;
                         v0 = data_len as u32;
@@ -302,7 +281,7 @@ where
                 Syscall::Write => match (a0 as u8).try_into() {
                     Ok(fd @ (Fd::Stdout | Fd::StdErr)) => {
                         let mut reader =
-                            MemoryReader::new(Rc::clone(&self.state.memory), a1 as Address, a2);
+                            MemoryReader::new(&mut self.state.memory, a1 as Address, a2);
                         let writer: &mut dyn Write = if matches!(fd, Fd::Stdout) {
                             &mut self.std_out
                         } else {
@@ -313,7 +292,7 @@ where
                     }
                     Ok(Fd::HintWrite) => {
                         let mut reader =
-                            MemoryReader::new(Rc::clone(&self.state.memory), a1 as Address, a2);
+                            MemoryReader::new(&mut self.state.memory, a1 as Address, a2);
                         let mut hint_data = Vec::with_capacity(a2 as usize);
                         reader.read_to_end(&mut hint_data)?;
                         self.state.last_hint.extend(hint_data);
@@ -340,11 +319,7 @@ where
                         let effective_address = a1 & 0xFFFFFFFC;
                         self.track_mem_access(effective_address as Address)?;
 
-                        let memory = self
-                            .state
-                            .memory
-                            .borrow_mut()
-                            .get_memory(effective_address as Address)?;
+                        let memory = self.state.memory.get_memory(effective_address as Address)?;
                         let mut key = self.state.preimage_key;
                         let alignment = a1 & 0x3;
                         let space = 4 - alignment;

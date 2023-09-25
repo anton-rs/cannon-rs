@@ -10,7 +10,7 @@ use rustc_hash::FxHashMap;
 use std::{cell::RefCell, io::Read, rc::Rc};
 
 /// The [Memory] struct represents the MIPS emulator's memory.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Memory {
     /// Map of generalized index -> the merkle root of each index. None if invalidated.
     nodes: FxHashMap<Gindex, Option<[u8; 32]>>,
@@ -333,14 +333,14 @@ impl Memory {
     }
 }
 
-pub struct MemoryReader {
-    memory: Rc<RefCell<Memory>>,
+pub struct MemoryReader<'a> {
+    memory: &'a mut Memory,
     address: Address,
     count: u32,
 }
 
-impl MemoryReader {
-    pub fn new(memory: Rc<RefCell<Memory>>, address: Address, count: u32) -> Self {
+impl<'a> MemoryReader<'a> {
+    pub fn new(memory: &'a mut Memory, address: Address, count: u32) -> Self {
         Self {
             memory,
             address,
@@ -349,7 +349,7 @@ impl MemoryReader {
     }
 }
 
-impl Read for MemoryReader {
+impl<'a> Read for MemoryReader<'a> {
     fn read(&mut self, mut buf: &mut [u8]) -> Result<usize, std::io::Error> {
         if self.count == 0 {
             return Ok(0);
@@ -365,9 +365,7 @@ impl Read for MemoryReader {
             end = end_address as usize & page::PAGE_ADDRESS_MASK;
         }
         let n = end - start;
-        // TODO(clabby): To support reading the full stream, we should use something
-        // less precise than `copy_from_slice`.
-        match self.memory.borrow_mut().page_lookup(page_index) {
+        match self.memory.page_lookup(page_index) {
             Some(page) => {
                 std::io::copy(&mut page.borrow().data[start..end].as_ref(), &mut buf)?;
             }
@@ -547,7 +545,7 @@ mod test {
         use super::*;
         use crate::memory::MemoryReader;
         use rand::RngCore;
-        use std::{cell::RefCell, io::Read, rc::Rc};
+        use std::io::Read;
 
         #[test]
         fn large_random() {
@@ -567,15 +565,13 @@ mod test {
 
         #[test]
         fn repeat_range() {
-            let memory = Rc::new(RefCell::new(Memory::default()));
+            let mut memory = Memory::default();
             let data = b"under the big bright yellow sun".repeat(40);
             memory
-                .borrow_mut()
                 .set_memory_range(0x1337, &data[..])
                 .expect("Should not error");
 
-            let mut reader =
-                MemoryReader::new(Rc::clone(&memory), 0x1337 - 10, data.len() as u32 + 20);
+            let mut reader = MemoryReader::new(&mut memory, 0x1337 - 10, data.len() as u32 + 20);
             let mut buf = Vec::with_capacity(1260);
             reader.read_to_end(&mut buf).unwrap();
 

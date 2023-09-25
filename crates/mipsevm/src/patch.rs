@@ -34,7 +34,7 @@ pub(crate) const GO_SYMBOLS: [&str; 14] = [
 pub fn load_elf(raw: &[u8]) -> Result<State> {
     let elf = ElfBytes::<AnyEndian>::minimal_parse(raw)?;
 
-    let state = State {
+    let mut state = State {
         pc: elf.ehdr.e_entry as u32,
         next_pc: elf.ehdr.e_entry as u32 + 4,
         heap: 0x20000000,
@@ -90,7 +90,6 @@ pub fn load_elf(raw: &[u8]) -> Result<State> {
 
         state
             .memory
-            .borrow_mut()
             .set_memory_range(header.p_vaddr as u32, reader)?;
     }
 
@@ -106,7 +105,7 @@ pub fn load_elf(raw: &[u8]) -> Result<State> {
 /// ### Returns
 /// - `Ok(())` if the patch was successful
 /// - `Err(_)` if the patch failed
-pub fn patch_go(raw: &[u8], state: &State) -> Result<()> {
+pub fn patch_go(raw: &[u8], state: &mut State) -> Result<()> {
     let elf = ElfBytes::<AnyEndian>::minimal_parse(raw)?;
     let (parsing_table, string_table) = elf
         .symbol_table()?
@@ -120,16 +119,13 @@ pub fn patch_go(raw: &[u8], state: &State) -> Result<()> {
             // MIPS32 patch: ret (pseudo instruction)
             // 03e00008 = jr $ra = ret (pseudo instruction)
             // 00000000 = nop (executes with delay-slot, but does nothing)
-            state.memory.borrow_mut().set_memory_range(
+            state.memory.set_memory_range(
                 symbol.st_value as u32,
                 [0x03, 0xe0, 0x00, 0x08, 0x00, 0x00, 0x00, 0x00].as_slice(),
             )?;
         } else if name == "runtime.MemProfileRate" {
             // disable mem profiling, to avoid a lot of unnecessary floating point ops
-            state
-                .memory
-                .borrow_mut()
-                .set_memory(symbol.st_value as u32, 0)?;
+            state.memory.set_memory(symbol.st_value as u32, 0)?;
         }
     }
     Ok(())
@@ -148,15 +144,15 @@ pub fn patch_stack(state: &mut State) -> Result<()> {
     let ptr = 0x7F_FF_D0_00_u32;
 
     // Allocate 1 page for the initial stack data, and 16KB = 4 pages for the stack to grow.
-    state.memory.borrow_mut().set_memory_range(
+    state.memory.set_memory_range(
         ptr - 4 * page::PAGE_SIZE as u32,
         [0u8; page::PAGE_SIZE * 5].as_slice(),
     )?;
     state.registers[29] = ptr;
 
     #[inline(always)]
-    fn store_mem(st: &State, address: Address, value: u32) -> Result<()> {
-        st.memory.borrow_mut().set_memory(address, value)
+    fn store_mem(st: &mut State, address: Address, value: u32) -> Result<()> {
+        st.memory.set_memory(address, value)
     }
 
     // init argc, argv, aux on stack
@@ -172,7 +168,6 @@ pub fn patch_stack(state: &mut State) -> Result<()> {
     // 16 bytes of "randomness"
     state
         .memory
-        .borrow_mut()
         .set_memory_range(ptr + 4 * 9, b"4;byfairdiceroll".as_slice())?;
 
     Ok(())
