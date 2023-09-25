@@ -1,7 +1,5 @@
 //! This module contains the data structure for the state of the MIPS emulator.
 
-use std::{cell::RefCell, rc::Rc};
-
 use crate::{witness::STATE_WITNESS_SIZE, Memory, StateWitness, VMStatus};
 use anyhow::Result;
 
@@ -12,7 +10,7 @@ use anyhow::Result;
 #[derive(Clone, Debug, Default)]
 pub struct State {
     /// The [Memory] of the emulated MIPS thread context.
-    pub memory: Rc<RefCell<Memory>>,
+    pub memory: Memory,
     /// The preimage key for the given state.
     pub preimage_key: [u8; 32],
     /// The preimage offset.
@@ -46,7 +44,7 @@ impl State {
     /// - A [Result] containing the encoded [StateWitness] or an error if the encoding failed.
     pub fn encode_witness(&mut self) -> Result<StateWitness> {
         let mut witness: StateWitness = [0u8; STATE_WITNESS_SIZE];
-        witness[..32].copy_from_slice(self.memory.borrow_mut().merkle_root()?.as_slice());
+        witness[..32].copy_from_slice(self.memory.merkle_root()?.as_slice());
         witness[32..64].copy_from_slice(self.preimage_key.as_slice());
         witness[64..68].copy_from_slice(&self.preimage_offset.to_be_bytes());
         witness[68..72].copy_from_slice(&self.pc.to_be_bytes());

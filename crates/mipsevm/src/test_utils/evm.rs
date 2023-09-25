@@ -226,11 +226,9 @@ mod test {
     };
     use revm::primitives::ExecutionResult;
     use std::{
-        cell::RefCell,
         fs,
         io::{self, BufReader, BufWriter},
         path::PathBuf,
-        rc::Rc,
     };
 
     #[test]
@@ -292,12 +290,11 @@ mod test {
                     let mut state = State::default();
                     state.pc = 0;
                     state.next_pc = 4;
-                    state.memory = Rc::new(RefCell::new(Memory::default()));
+                    state.memory = Memory::default();
                     state
                 };
                 state
                     .memory
-                    .borrow_mut()
                     .set_memory_range(0, BufReader::new(program_mem.as_slice()))
                     .unwrap();
 
@@ -322,7 +319,6 @@ mod test {
                     let instruction = instrumented
                         .state
                         .memory
-                        .borrow_mut()
                         .get_memory(instrumented.state.pc as Address)
                         .unwrap();
                     println!(
@@ -348,7 +344,7 @@ mod test {
                     assert_eq!(1, instrumented.state.exit_code, "must exit with 1");
                 } else {
                     assert_eq!(END_ADDR, instrumented.state.pc, "must reach end");
-                    let mut state = instrumented.state.memory.borrow_mut();
+                    let mut state = instrumented.state.memory;
                     let (done, result) = (
                         state.get_memory((BASE_ADDR_END + 4) as Address).unwrap(),
                         state.get_memory((BASE_ADDR_END + 8) as Address).unwrap(),
@@ -388,11 +384,7 @@ mod test {
             let mut state = State::default();
             state.pc = pc;
             state.next_pc = next_pc;
-            state
-                .memory
-                .borrow_mut()
-                .set_memory(pc, instruction)
-                .unwrap();
+            state.memory.set_memory(pc, instruction).unwrap();
 
             let mut instrumented = InstrumentedState::new(
                 state,
@@ -423,14 +415,11 @@ mod test {
         for (name, next_pc, instruction) in cases {
             println!(" -> Running test: {name}");
 
-            let mut state = State::default();
-            state.next_pc = next_pc;
-            let mut initial_state = state.clone();
-            state
-                .memory
-                .borrow_mut()
-                .set_memory(0, instruction)
-                .unwrap();
+            let mut state = State {
+                next_pc: next_pc as Address,
+                ..Default::default()
+            };
+            state.memory.set_memory(0, instruction).unwrap();
 
             // Set the return address ($ra) to jump to when the test completes.
             state.registers[31] = END_ADDR;
@@ -443,7 +432,12 @@ mod test {
             );
             assert!(instrumented.step(true).is_err());
 
-            let instruction_proof = initial_state.memory.borrow_mut().merkle_proof(0).unwrap();
+            let mut initial_state = State {
+                next_pc: next_pc as Address,
+                memory: instrumented.state.memory.clone(),
+                ..Default::default()
+            };
+            let instruction_proof = initial_state.memory.merkle_proof(0).unwrap();
             let step_witness = StepWitness {
                 state: initial_state.encode_witness().unwrap(),
                 mem_proof: instruction_proof.to_vec(),
@@ -477,7 +471,6 @@ mod test {
                 let instruction = instrumented
                     .state
                     .memory
-                    .borrow_mut()
                     .get_memory(instrumented.state.pc as Address)
                     .unwrap();
                 println!(
@@ -522,7 +515,6 @@ mod test {
                 let instruction = instrumented
                     .state
                     .memory
-                    .borrow_mut()
                     .get_memory(instrumented.state.pc as Address)
                     .unwrap();
                 println!(
