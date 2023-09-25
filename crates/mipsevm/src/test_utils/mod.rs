@@ -2,8 +2,8 @@
 
 use crate::{utils::concat_fixed, PreimageOracle};
 use alloy_primitives::{hex, keccak256};
+use fnv::FnvHashMap;
 use preimage_oracle::{Keccak256Key, Key, LocalIndexKey};
-use revm::primitives::HashMap;
 
 pub mod evm;
 
@@ -38,7 +38,7 @@ impl PreimageOracle for StaticOracle {
 }
 
 pub struct ClaimTestOracle {
-    images: HashMap<[u8; 32], Vec<u8>>,
+    images: FnvHashMap<[u8; 32], Vec<u8>>,
 }
 
 impl ClaimTestOracle {
@@ -46,6 +46,7 @@ impl ClaimTestOracle {
     pub(crate) const A: u64 = 3;
     pub(crate) const B: u64 = 4;
 
+    #[inline(always)]
     pub fn diff() -> [u8; 64] {
         concat_fixed(
             keccak256(Self::A.to_be_bytes()).into(),
@@ -53,10 +54,12 @@ impl ClaimTestOracle {
         )
     }
 
+    #[inline(always)]
     pub fn pre_hash() -> [u8; 32] {
         *keccak256(Self::S.to_be_bytes())
     }
 
+    #[inline(always)]
     pub fn diff_hash() -> [u8; 32] {
         *keccak256(Self::diff().as_slice())
     }
@@ -65,7 +68,7 @@ impl ClaimTestOracle {
 impl Default for ClaimTestOracle {
     fn default() -> Self {
         let mut s = Self {
-            images: HashMap::new(),
+            images: Default::default(),
         };
 
         s.images.insert(

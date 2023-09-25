@@ -29,7 +29,7 @@ pub struct CachedPage {
     /// Storage for intermediate nodes
     pub cache: [[u8; 32]; PAGE_SIZE_WORDS],
     /// Bitmap for 128 nodes. 1 if valid, 0 if invalid.
-    valid: u128,
+    pub valid: [bool; PAGE_SIZE / 32],
 }
 
 impl Default for CachedPage {
@@ -37,7 +37,7 @@ impl Default for CachedPage {
         Self {
             data: [0; PAGE_SIZE],
             cache: [[0; 32]; PAGE_SIZE_WORDS],
-            valid: 0,
+            valid: [false; PAGE_SIZE / 32],
         }
     }
 }
@@ -58,11 +58,8 @@ impl CachedPage {
         // The first cache layer caches nodes that have two 32 byte leaf nodes.
         let key = ((1 << PAGE_ADDRESS_SIZE) | page_addr) >> 6;
 
-        // Create a mask where all bits from position `127 - key` and above are set
-        let mask: u128 = !((1 << (127 - key)) - 1);
-
-        // Apply the mask to the valid bitmap
-        self.valid &= !mask;
+        // Invalidate the key and all subsequent keys using slicing
+        self.valid[..=key as usize].fill(false);
 
         Ok(())
     }
@@ -71,7 +68,7 @@ impl CachedPage {
     ///
     /// This is equivalent to calling `invalidate` on every address in the page.
     pub fn invalidate_full(&mut self) {
-        self.valid = 0;
+        self.valid = [false; PAGE_SIZE / 32];
     }
 
     /// Compute the merkle root of the [Page].
@@ -82,23 +79,23 @@ impl CachedPage {
         // First, hash the bottom layer.
         for i in (0..PAGE_SIZE).step_by(64) {
             let j = (PAGE_SIZE_WORDS >> 1) + (i >> 6);
-            if self.is_valid(j) {
+            if self.valid[j] {
                 continue;
             }
 
             self.cache[j] = *keccak256(&self.data[i..i + 64]);
-            self.set_valid(j, true);
+            self.valid[j] = true;
         }
 
         // Then, hash the cache layers.
         for i in (1..=PAGE_SIZE_WORDS - 2).rev().step_by(2) {
             let j = i >> 1;
-            if self.is_valid(j) {
+            if self.valid[j] {
                 continue;
             }
             let (a, b) = self.cache.split_at_mut(i);
             a[j] = *keccak_concat_fixed(b[0], b[1]);
-            self.set_valid(j, true);
+            self.valid[j] = true;
         }
 
         self.cache[1]
@@ -112,7 +109,7 @@ impl CachedPage {
     /// ### Returns
     /// - The 32 byte merkle root hash of the subtree.
     fn fill_cache(&mut self, g_index: usize) -> [u8; 32] {
-        if self.is_valid(g_index) {
+        if self.valid[g_index] {
             return self.cache[g_index];
         }
 
@@ -131,7 +128,7 @@ impl CachedPage {
 
             *keccak_concat_fixed(self.cache[left_child], self.cache[right_child])
         };
-        self.set_valid(g_index, true);
+        self.valid[g_index] = true;
         self.cache[g_index] = hash;
         hash
     }
@@ -154,28 +151,6 @@ impl CachedPage {
         }
 
         Ok(self.fill_cache(g_index as usize))
-    }
-
-    /// Check if a key is valid within the bitmap.
-    ///
-    /// ### Takes
-    /// - `key`: The key to check.
-    #[inline(always)]
-    pub fn is_valid(&self, key: usize) -> bool {
-        let flag = 1 << (127 - key);
-        self.valid & flag == flag
-    }
-
-    /// Set a key as valid or invalid within the bitmap.
-    ///
-    /// ### Takes
-    /// - `key`: The key to set.
-    /// - `valid`: Whether the key should be set as valid or invalid.
-    #[inline(always)]
-    pub fn set_valid(&mut self, key: usize, valid: bool) {
-        let flag_offset = 127 - key;
-        self.valid &= !(1 << flag_offset);
-        self.valid |= (valid as u128) << flag_offset;
     }
 }
 

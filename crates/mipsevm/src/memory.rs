@@ -63,7 +63,7 @@ impl Memory {
         match self.page_lookup(address as u64 >> page::PAGE_ADDRESS_SIZE) {
             Some(page) => {
                 let mut page = page.borrow_mut();
-                let prev_valid = !page.is_valid(1);
+                let prev_valid = !page.valid[1];
 
                 // Invalidate the address within the page.
                 page.invalidate(address & page::PAGE_ADDRESS_MASK as u32)?;
