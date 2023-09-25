@@ -9,3 +9,6 @@ authors = ["clabby"]
 [profile.dev]
 opt-level = 1
 overflow-checks = false
+
+[profile.bench]
+debug = true
