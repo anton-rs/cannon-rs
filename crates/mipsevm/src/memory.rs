@@ -173,29 +173,12 @@ impl Memory {
     pub fn merkle_proof(&mut self, address: Address) -> Result<[u8; 28 * 32]> {
         let proof = self.traverse_branch(1, address, 0)?;
 
-        // Ensure that the proof has the expected length
-        if proof.len() != 28 {
-            anyhow::bail!("Proof has unexpected length")
-        }
-
-        // Convert the Vec into a boxed slice
-        let boxed_slice: Box<[[u8; 32]]> = proof.into_boxed_slice();
-
-        // Convert the boxed slice into a raw pointer
-        let raw = Box::into_raw(boxed_slice);
-
-        // Reinterpret the raw pointer as a pointer to [u8; 28 * 32]
-        let result_array_ptr = raw as *mut [u8; 28 * 32];
-
-        // Dereference the pointer to get the [u8; 28 * 32]
-        //
-        // SAFETY: This is safe because the memory layout of [[u8; 32]; 28] and
-        //         [u8; 28 * 32] are the same. We've asserted that the length of
-        //         the boxed slice of [u8; 32]s is 28 above, so there is no risk
-        //         of reading out of bounds or undefined behavior.
-        let result_array = unsafe { *result_array_ptr };
-
-        Ok(result_array)
+        Ok(proof
+            .into_iter()
+            .flatten()
+            .collect::<Vec<u8>>()
+            .try_into()
+            .map_err(|_| anyhow::anyhow!("Failed to convert proof to fixed array"))?)
     }
 
     /// Traverse a branch of the merkle tree, generating a proof for the given address.
@@ -232,6 +215,7 @@ impl Memory {
         let mut proof = self.traverse_branch(local, address, depth + 1)?;
         let sibling_node = self.merkleize_subtree(sibling)?;
         proof.push(sibling_node);
+
         Ok(proof)
     }
 
