@@ -173,12 +173,12 @@ impl Memory {
     pub fn merkle_proof(&mut self, address: Address) -> Result<[u8; 28 * 32]> {
         let proof = self.traverse_branch(1, address, 0)?;
 
-        Ok(proof
+        proof
             .into_iter()
             .flatten()
             .collect::<Vec<u8>>()
             .try_into()
-            .map_err(|_| anyhow::anyhow!("Failed to convert proof to fixed array"))?)
+            .map_err(|_| anyhow::anyhow!("Failed to convert proof to fixed array"))
     }
 
     /// Traverse a branch of the merkle tree, generating a proof for the given address.

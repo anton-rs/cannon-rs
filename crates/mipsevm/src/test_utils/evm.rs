@@ -115,8 +115,8 @@ impl MipsEVM<CacheDB<EmptyDB>> {
         if witness.has_preimage() {
             crate::debug!(
                 target: "mipsevm::evm",
-                "Reading preimage key {:x} at offset {}",
-                B256::from(witness.preimage_key),
+                "Reading preimage key {:x} at offset {:?}",
+                B256::from(witness.preimage_key.ok_or(anyhow::anyhow!("Missing preimage key"))?),
                 witness.preimage_offset
             );
 
@@ -447,9 +447,9 @@ mod test {
             let step_witness = StepWitness {
                 state: initial_state.encode_witness().unwrap(),
                 mem_proof: instruction_proof.to_vec(),
-                preimage_key: [0u8; 32],
-                preimage_value: Vec::default(),
-                preimage_offset: 0,
+                preimage_key: None,
+                preimage_value: None,
+                preimage_offset: None,
             };
             assert!(mips_evm.step(step_witness).is_err());
         }
