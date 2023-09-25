@@ -80,7 +80,7 @@ impl CachedPage {
         for i in (0..PAGE_SIZE).step_by(64) {
             let j = (PAGE_SIZE_WORDS >> 1) + (i >> 6);
             if self.valid[j] {
-                continue;
+                break;
             }
 
             self.cache[j] = *keccak256(&self.data[i..i + 64]);
@@ -91,10 +91,10 @@ impl CachedPage {
         for i in (1..=PAGE_SIZE_WORDS - 2).rev().step_by(2) {
             let j = i >> 1;
             if self.valid[j] {
-                continue;
+                break;
             }
-            let (a, b) = self.cache.split_at_mut(i);
-            a[j] = *keccak_concat_fixed(b[0], b[1]);
+
+            self.cache[j] = *keccak_concat_fixed(self.cache[i], self.cache[i + 1]);
             self.valid[j] = true;
         }
 
@@ -108,7 +108,8 @@ impl CachedPage {
     ///
     /// ### Returns
     /// - The 32 byte merkle root hash of the subtree.
-    fn fill_cache(&mut self, g_index: usize) -> [u8; 32] {
+    #[inline(always)]
+    fn fill_subtree_cache(&mut self, g_index: usize) -> [u8; 32] {
         if self.valid[g_index] {
             return self.cache[g_index];
         }
@@ -123,10 +124,10 @@ impl CachedPage {
             let right_child = left_child + 1;
 
             // Ensure children are hashed.
-            self.fill_cache(left_child);
-            self.fill_cache(right_child);
-
-            *keccak_concat_fixed(self.cache[left_child], self.cache[right_child])
+            *keccak_concat_fixed(
+                self.fill_subtree_cache(left_child),
+                self.fill_subtree_cache(right_child),
+            )
         };
         self.valid[g_index] = true;
         self.cache[g_index] = hash;
@@ -150,7 +151,7 @@ impl CachedPage {
             anyhow::bail!("Generalized index is too deep: {}", g_index);
         }
 
-        Ok(self.fill_cache(g_index as usize))
+        Ok(self.fill_subtree_cache(g_index as usize))
     }
 }
 
