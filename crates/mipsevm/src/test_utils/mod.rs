@@ -2,8 +2,8 @@
 
 use crate::{utils::concat_fixed, PreimageOracle};
 use alloy_primitives::{hex, keccak256};
-use fnv::FnvHashMap;
 use preimage_oracle::{Keccak256Key, Key, LocalIndexKey};
+use rustc_hash::FxHashMap;
 
 pub mod evm;
 
@@ -38,7 +38,7 @@ impl PreimageOracle for StaticOracle {
 }
 
 pub struct ClaimTestOracle {
-    images: FnvHashMap<[u8; 32], Vec<u8>>,
+    images: FxHashMap<[u8; 32], Vec<u8>>,
 }
 
 impl ClaimTestOracle {

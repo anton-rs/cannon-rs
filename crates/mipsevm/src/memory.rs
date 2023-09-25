@@ -6,16 +6,16 @@ use crate::{
     Address, Gindex, PageIndex,
 };
 use anyhow::Result;
-use fnv::FnvHashMap;
+use rustc_hash::FxHashMap;
 use std::{cell::RefCell, io::Read, rc::Rc};
 
 /// The [Memory] struct represents the MIPS emulator's memory.
 #[derive(Debug)]
 pub struct Memory {
     /// Map of generalized index -> the merkle root of each index. None if invalidated.
-    nodes: FnvHashMap<Gindex, Option<[u8; 32]>>,
+    nodes: FxHashMap<Gindex, Option<[u8; 32]>>,
     /// Map of page indices to [CachedPage]s.
-    pages: FnvHashMap<PageIndex, Rc<RefCell<CachedPage>>>,
+    pages: FxHashMap<PageIndex, Rc<RefCell<CachedPage>>>,
     /// We store two caches upfront; we often read instructions from one page and reserve another
     /// for scratch memory. This prevents map lookups for each instruction.
     last_page: [(PageIndex, Option<Rc<RefCell<CachedPage>>>); 2],
@@ -24,8 +24,8 @@ pub struct Memory {
 impl Default for Memory {
     fn default() -> Self {
         Self {
-            nodes: FnvHashMap::default(),
-            pages: FnvHashMap::default(),
+            nodes: FxHashMap::default(),
+            pages: FxHashMap::default(),
             last_page: [(!0u64, None), (!0u64, None)],
         }
     }
