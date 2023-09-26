@@ -50,6 +50,7 @@ impl CachedPage {
     ///
     /// ### Returns
     /// - A [Result] indicating if the operation was successful.
+    #[inline(always)]
     pub fn invalidate(&mut self, page_addr: Address) -> Result<()> {
         if page_addr >= PAGE_SIZE as Address {
             anyhow::bail!("Invalid page address: {}", page_addr);
@@ -67,6 +68,7 @@ impl CachedPage {
     /// Invalidate the entire [Page].
     ///
     /// This is equivalent to calling `invalidate` on every address in the page.
+    #[inline(always)]
     pub fn invalidate_full(&mut self) {
         self.valid = [false; PAGE_SIZE / 32];
     }
@@ -75,43 +77,31 @@ impl CachedPage {
     ///
     /// ## Returns
     /// - The 32 byte merkle root hash of the [Page].
-    pub fn merkle_root(&mut self) -> [u8; 32] {
-        // First, hash the bottom layer.
-        for i in (0..PAGE_SIZE).step_by(64) {
-            let j = (PAGE_SIZE_WORDS >> 1) + (i >> 6);
-            if self.valid[j] {
-                break;
-            }
-
-            self.cache[j] = *keccak256(&self.data[i..i + 64]);
-            self.valid[j] = true;
-        }
-
-        // Then, hash the cache layers.
-        for i in (1..=PAGE_SIZE_WORDS - 2).rev().step_by(2) {
-            let j = i >> 1;
-            if self.valid[j] {
-                break;
-            }
-
-            self.cache[j] = *keccak_concat_fixed(self.cache[i], self.cache[i + 1]);
-            self.valid[j] = true;
-        }
-
-        self.cache[1]
+    #[inline(always)]
+    pub fn merkle_root(&mut self) -> Result<[u8; 32]> {
+        self.merkleize_subtree(1)
     }
 
-    /// Fill the cache with the merkleized subtree who's root is the passed generalized index.
+    /// Compute the merkle root for the subtree rooted at the given generalized index.
     ///
     /// ### Takes
     /// - `g_index`: The generalized index of the subtree to merkleize.
     ///
     /// ### Returns
-    /// - The 32 byte merkle root hash of the subtree.
+    /// - A [Result] containing the 32 byte merkle root hash of the subtree or an error if the
+    ///  generalized index is too deep.
     #[inline(always)]
-    fn fill_subtree_cache(&mut self, g_index: usize) -> [u8; 32] {
-        if self.valid[g_index] {
-            return self.cache[g_index];
+    pub fn merkleize_subtree(&mut self, g_index: Gindex) -> Result<[u8; 32]> {
+        // Cast to usize to avoid `as usize` everywhere.
+        let g_index = g_index as usize;
+
+        if (PAGE_SIZE_WORDS..PAGE_SIZE_WORDS * 2).contains(&g_index) {
+            let node_index = (g_index & (PAGE_ADDRESS_MASK >> 5)) << 5;
+            return Ok(self.data[node_index..node_index + 32].try_into()?);
+        } else if g_index >= PAGE_SIZE_WORDS * 2 {
+            anyhow::bail!("Generalized index is too deep: {}", g_index);
+        } else if self.valid[g_index] {
+            return Ok(self.cache[g_index]);
         }
 
         let hash = if g_index >= PAGE_SIZE_WORDS >> 1 {
@@ -125,33 +115,13 @@ impl CachedPage {
 
             // Ensure children are hashed.
             *keccak_concat_fixed(
-                self.fill_subtree_cache(left_child),
-                self.fill_subtree_cache(right_child),
+                self.merkleize_subtree(left_child as Gindex)?,
+                self.merkleize_subtree(right_child as Gindex)?,
             )
         };
         self.valid[g_index] = true;
         self.cache[g_index] = hash;
-        hash
-    }
-
-    /// Compute the merkle root for the subtree rooted at the given generalized index.
-    ///
-    /// ### Takes
-    /// - `g_index`: The generalized index of the subtree to merkleize.
-    ///
-    /// ### Returns
-    /// - A [Result] containing the 32 byte merkle root hash of the subtree or an error if the
-    ///  generalized index is too deep.
-    pub fn merkleize_subtree(&mut self, g_index: Gindex) -> Result<[u8; 32]> {
-        if (PAGE_SIZE_WORDS..PAGE_SIZE_WORDS * 2).contains(&(g_index as usize)) {
-            let node_index = g_index as usize & (PAGE_ADDRESS_MASK >> 5);
-            let start = node_index << 5;
-            return Ok(self.data[start..start + 32].try_into()?);
-        } else if g_index as usize >= PAGE_SIZE_WORDS * 2 {
-            anyhow::bail!("Generalized index is too deep: {}", g_index);
-        }
-
-        Ok(self.fill_subtree_cache(g_index as usize))
+        Ok(hash)
     }
 }
 
@@ -179,16 +149,16 @@ mod test {
             keccak_concat_fixed(expected_parent.into(), ZERO_HASHES[1].into());
         assert_eq!(node, expected_grandparent, "Grandparent should be correct");
 
-        let pre = page.merkle_root();
+        let pre = page.merkle_root().unwrap();
         page.data[42] = 0xcd;
-        let post = page.merkle_root();
+        let post = page.merkle_root().unwrap();
         assert_eq!(
             pre, post,
             "Pre and post state should be equal until the cache is invalidated"
         );
 
         page.invalidate(42).unwrap();
-        let post_b = page.merkle_root();
+        let post_b = page.merkle_root().unwrap();
         assert_ne!(
             post, post_b,
             "Pre and post state should be different after cache invalidation"
@@ -196,14 +166,14 @@ mod test {
 
         page.data[2000] = 0xef;
         page.invalidate(42).unwrap();
-        let post_c = page.merkle_root();
+        let post_c = page.merkle_root().unwrap();
         assert_eq!(
             post_b, post_c,
             "Local invalidation is not global invalidation."
         );
 
         page.invalidate(2000).unwrap();
-        let post_d = page.merkle_root();
+        let post_d = page.merkle_root().unwrap();
         assert_ne!(
             post_c, post_d,
             "Multiple invalidations should change the root."
@@ -211,7 +181,7 @@ mod test {
 
         page.data[1000] = 0xff;
         page.invalidate_full();
-        let post_e = page.merkle_root();
+        let post_e = page.merkle_root().unwrap();
         assert_ne!(
             post_d, post_e,
             "Full invalidation should always change the root."

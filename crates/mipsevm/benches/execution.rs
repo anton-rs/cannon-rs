@@ -29,22 +29,25 @@ fn bench_exec(
 }
 
 fn execution(c: &mut Criterion) {
-    c.bench_function("[No Witness] Execution (hello.elf)", |b| {
+    let mut g = c.benchmark_group("execution");
+    g.sample_size(10);
+
+    g.bench_function("[No Witness] Execution (hello.elf)", |b| {
         let elf_bytes = include_bytes!("../../../example/bin/hello.elf");
         bench_exec(elf_bytes, StaticOracle::default(), false, b);
     });
 
-    c.bench_function("[Witness] Execution (hello.elf)", |b| {
+    g.bench_function("[Witness] Execution (hello.elf)", |b| {
         let elf_bytes = include_bytes!("../../../example/bin/hello.elf");
         bench_exec(elf_bytes, StaticOracle::default(), true, b);
     });
 
-    c.bench_function("[No Witness] Execution (claim.elf)", |b| {
+    g.bench_function("[No Witness] Execution (claim.elf)", |b| {
         let elf_bytes = include_bytes!("../../../example/bin/claim.elf");
         bench_exec(elf_bytes, ClaimTestOracle::default(), false, b);
     });
 
-    c.bench_function("[Witness] Execution (claim.elf)", |b| {
+    g.bench_function("[Witness] Execution (claim.elf)", |b| {
         let elf_bytes = include_bytes!("../../../example/bin/claim.elf");
         bench_exec(elf_bytes, ClaimTestOracle::default(), true, b);
     });

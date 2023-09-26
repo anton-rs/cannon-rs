@@ -138,12 +138,10 @@ impl Memory {
             anyhow::bail!("Cannot jump into intermediate node of page")
         }
 
-        if let Some(node) = self.nodes.get(&g_index) {
-            if let Some(node) = node {
-                return Ok(*node);
-            }
-        } else {
-            return Ok(page::ZERO_HASHES[28 - bits as usize]);
+        match self.nodes.get(&g_index) {
+            Some(Some(node)) => return Ok(*node),
+            None => return Ok(page::ZERO_HASHES[28 - bits as usize]),
+            _ => { /* noop */ }
         }
 
         let left = self.merkleize_subtree(g_index << 1)?;
