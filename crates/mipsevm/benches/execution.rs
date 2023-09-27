@@ -4,8 +4,10 @@ use cannon_mipsevm::{
     InstrumentedState, PreimageOracle,
 };
 use criterion::{criterion_group, criterion_main, Bencher, Criterion};
+use pprof::criterion::{Output, PProfProfiler};
 use std::io::BufWriter;
 
+#[inline(always)]
 fn bench_exec(
     elf_bytes: &[u8],
     oracle: impl PreimageOracle,
@@ -53,5 +55,9 @@ fn execution(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, execution);
+criterion_group! {
+    name = benches;
+    config = Criterion::default().with_profiler(PProfProfiler::new(100, Output::Flamegraph(None)));
+    targets = execution
+}
 criterion_main!(benches);

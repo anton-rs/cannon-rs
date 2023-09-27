@@ -1,5 +1,6 @@
 use cannon_mipsevm::Memory;
 use criterion::{criterion_group, criterion_main, Criterion};
+use pprof::criterion::{Output, PProfProfiler};
 use rand::RngCore;
 
 fn merkle_root(c: &mut Criterion) {
@@ -55,5 +56,9 @@ fn merkle_root(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, merkle_root);
+criterion_group! {
+    name = benches;
+    config = Criterion::default().with_profiler(PProfProfiler::new(100, Output::Flamegraph(None)));
+    targets = merkle_root
+}
 criterion_main!(benches);
