@@ -245,7 +245,11 @@ impl Memory {
                 self.invalidate(address)?;
                 Ok::<_, anyhow::Error>(page)
             })
-            .unwrap_or_else(|| self.alloc_page(page_index))?;
+            .unwrap_or_else(|| {
+                let page = self.alloc_page(page_index)?;
+                let _ = page.borrow_mut().invalidate(page_address as Address);
+                Ok(page)
+            })?;
 
         // Copy the 32 bit value into the page
         page.borrow_mut().data[page_address..page_address + 4]

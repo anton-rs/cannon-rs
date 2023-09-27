@@ -22,6 +22,17 @@ pub(crate) static ZERO_HASHES: Lazy<[[u8; 32]; 256]> = Lazy::new(|| {
     out
 });
 
+/// Precomputed cache of a merkleized page with all zero data.
+pub(crate) static DEFAULT_CACHE: Lazy<[[u8; 32]; PAGE_SIZE_WORDS]> = Lazy::new(|| {
+    let mut page = CachedPage {
+        data: [0; PAGE_SIZE],
+        cache: [[0; 32]; PAGE_SIZE_WORDS],
+        valid: [false; PAGE_SIZE / 32],
+    };
+    page.merkle_root().unwrap();
+    page.cache
+});
+
 /// A [CachedPage] is a [Page] with an in-memory cache of intermediate nodes.
 #[derive(Debug, Clone, Copy)]
 pub struct CachedPage {
@@ -36,8 +47,8 @@ impl Default for CachedPage {
     fn default() -> Self {
         Self {
             data: [0; PAGE_SIZE],
-            cache: [[0; 32]; PAGE_SIZE_WORDS],
-            valid: [false; PAGE_SIZE / 32],
+            cache: *DEFAULT_CACHE,
+            valid: [true; PAGE_SIZE / 32],
         }
     }
 }
@@ -133,6 +144,7 @@ mod test {
     fn cached_page_static() {
         let mut page = CachedPage::default();
         page.data[42] = 0xab;
+        page.invalidate(42).unwrap();
 
         let g_index = ((1 << PAGE_ADDRESS_SIZE) | 42) >> 5;
         let node = page.merkleize_subtree(g_index).unwrap();
