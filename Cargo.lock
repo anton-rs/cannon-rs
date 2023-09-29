@@ -427,9 +427,12 @@ dependencies = [
 name = "cannon-rs"
 version = "0.1.0"
 dependencies = [
+ "alloy-primitives",
  "anyhow",
  "cannon-mipsevm",
  "clap",
+ "serde",
+ "serde_json",
  "tracing",
  "tracing-subscriber",
 ]

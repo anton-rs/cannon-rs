@@ -26,7 +26,7 @@ fn main() -> Result<()> {
     init_tracing_subscriber(v)?;
 
     tracing::debug!(target: "cannon-cli", "Dispatching subcommand");
-    subcommand.dispatch();
+    subcommand.dispatch()?;
 
     Ok(())
 }

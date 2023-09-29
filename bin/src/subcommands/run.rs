@@ -1,8 +1,8 @@
 //! The `run` subcommand for the cannon binary
 
-use clap::Args;
-
 use super::CannonSubcommandDispatcher;
+use anyhow::Result;
+use clap::Args;
 
 /// Command line arguments for `cannon run`
 #[derive(Args, Debug)]
@@ -51,7 +51,7 @@ pub(crate) struct RunArgs {
 }
 
 impl CannonSubcommandDispatcher for RunArgs {
-    fn dispatch(&self) {
+    fn dispatch(&self) -> Result<()> {
         todo!()
     }
 }
