@@ -2,6 +2,7 @@
 
 use super::CannonSubcommandDispatcher;
 use anyhow::Result;
+use async_trait::async_trait;
 use clap::Args;
 
 /// Command line arguments for `cannon run`
@@ -50,8 +51,9 @@ pub(crate) struct RunArgs {
     l2_endpoint: String,
 }
 
+#[async_trait]
 impl CannonSubcommandDispatcher for RunArgs {
-    fn dispatch(&self) -> Result<()> {
+    async fn dispatch(&self) -> Result<()> {
         todo!()
     }
 }

@@ -19,7 +19,8 @@ struct Args {
     subcommand: subcommands::CannonSubcommand,
 }
 
-fn main() -> Result<()> {
+#[tokio::main]
+async fn main() -> Result<()> {
     // Parse the command arguments
     let Args { v, subcommand } = Args::parse();
 
@@ -27,7 +28,7 @@ fn main() -> Result<()> {
     init_tracing_subscriber(v)?;
 
     tracing::debug!(target: "cannon-cli", "Dispatching subcommand");
-    subcommand.dispatch()?;
+    subcommand.dispatch().await?;
 
     Ok(())
 }

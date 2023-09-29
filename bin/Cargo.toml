@@ -17,6 +17,7 @@ serde_json = "1.0.107"
 alloy-primitives = "0.3.3"
 tokio = { version = "1.32.0", features = ["macros"] }
 flate2 = "1.0.27"
+async-trait = "0.1.73"
 
 # Local
 cannon-mipsevm = { path = "../crates/mipsevm" }
