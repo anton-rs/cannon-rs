@@ -2,12 +2,13 @@
 
 use crate::{witness::STATE_WITNESS_SIZE, Memory, StateWitness, VMStatus};
 use anyhow::Result;
+use serde::{Deserialize, Serialize};
 
 /// The [State] struct contains the internal model of the MIPS emulator state.
 ///
 /// The [State] by itself does not contain functionality for performing instruction steps
 /// or executing the MIPS emulator. For this, use the [crate::InstrumentedState] struct.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct State {
     /// The [Memory] of the emulated MIPS thread context.
     pub memory: Memory,
