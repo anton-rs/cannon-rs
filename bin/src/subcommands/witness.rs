@@ -1,6 +1,7 @@
 //! The `witness` subcommand for the cannon binary
 
 use super::CannonSubcommandDispatcher;
+use crate::compressor::decompress_bytes;
 use alloy_primitives::B256;
 use anyhow::Result;
 use cannon_mipsevm::{State, StateWitnessHasher};
@@ -24,9 +25,8 @@ impl CannonSubcommandDispatcher for WitnessArgs {
     fn dispatch(&self) -> Result<()> {
         tracing::info!(target: "cannon-cli::witness", "Loading state JSON dump from {}", self.input.display());
 
-        // TODO(clabby): State compression on disk. Rn we're reading raw.
-        let state_raw = fs::read_to_string(&self.input)?;
-        let mut state: State = serde_json::from_str(&state_raw)?;
+        let state_raw = fs::read(&self.input)?;
+        let mut state: State = serde_json::from_slice(&decompress_bytes(&state_raw)?)?;
 
         tracing::info!(target: "cannon-cli::witness", "Loaded state JSON dump and deserialized the State");
 

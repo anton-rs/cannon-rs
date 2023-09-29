@@ -1,5 +1,7 @@
 //! The `load-elf` subcommand for the cannon binary
 
+use crate::compressor::compress_bytes;
+
 use super::CannonSubcommandDispatcher;
 use anyhow::Result;
 use cannon_mipsevm::{load_elf, patch_go, patch_stack};
@@ -61,12 +63,11 @@ impl CannonSubcommandDispatcher for LoadElfArgs {
             }
         }?;
 
-        // TODO(clabby): Compression
         if let Some(ref path_str) = self.output {
             if path_str == "-" {
                 println!("{}", serde_json::to_string(&state)?);
             } else {
-                fs::write(path_str, serde_json::to_string(&state)?)?;
+                fs::write(path_str, compress_bytes(&serde_json::to_vec(&state)?)?)?;
             }
         }
 
