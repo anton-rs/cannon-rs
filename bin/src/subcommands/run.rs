@@ -11,7 +11,7 @@ use clap::Args;
 #[command(author, version, about)]
 pub(crate) struct RunArgs {
     /// The preimage oracle command
-    #[arg(long, short)]
+    #[arg(long)]
     preimage_server: String,
 
     /// The path to the input JSON state.
@@ -23,20 +23,20 @@ pub(crate) struct RunArgs {
     output: Option<String>,
 
     /// The step to generate an output proof at.
-    #[arg(long, short)]
+    #[arg(long)]
     proof_at: Option<String>,
 
     /// Format for proof data output file names. Proof data is written to stdout
     /// if this is not specified.
-    #[arg(long)]
+    #[arg(long, aliases = ["proof-fmt"])]
     proof_format: Option<String>,
 
     /// The step pattern to generate state snapshots at.
-    #[arg(long, short)]
+    #[arg(long)]
     snapshot_at: Option<String>,
 
     /// Format for snapshot data output file names.
-    #[arg(long)]
+    #[arg(long, aliases = ["snapshot-fmt"])]
     snapshot_format: Option<String>,
 
     /// The instruction step to stop running at.
@@ -44,14 +44,14 @@ pub(crate) struct RunArgs {
     stop_at: Option<String>,
 
     /// The pattern to print information at.
-    #[arg(long, short)]
+    #[arg(long)]
     info_at: Option<String>,
 }
 
 #[async_trait]
 impl CannonSubcommandDispatcher for RunArgs {
     async fn dispatch(self) -> Result<()> {
-        let mut kernel = KernelBuilder::default()
+        let kernel = KernelBuilder::default()
             .with_preimage_server(self.preimage_server)
             .with_input(self.input)
             .with_output(self.output)

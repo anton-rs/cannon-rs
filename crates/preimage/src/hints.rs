@@ -87,7 +87,7 @@ mod tests {
         atomic::{AtomicU32, Ordering},
         Arc,
     };
-    use tokio::sync::Mutex;
+    use tokio::{sync::Mutex, try_join};
 
     async fn test_hint(hints: Vec<Vec<u8>>) {
         let (a, b) = crate::create_bidirectional_channel().unwrap();
@@ -115,9 +115,9 @@ mod tests {
                 Arc::clone(&counter_received),
             );
             async move {
-                for i in 0..hints_b.len() {
+                for _ in 0..hints_b.len() {
                     let counter_r = Arc::clone(&counter_r);
-                    match reader.lock().await.next_hint(Box::new(move |hint| {
+                    match reader.lock().await.next_hint(Box::new(move |_| {
                         // Increase the number of hint requests received.
                         counter_r.fetch_add(1, Ordering::SeqCst);
                         Ok(())
@@ -202,7 +202,7 @@ mod tests {
             async move {
                 let mut reader_lock = reader.lock().await;
 
-                let Err(_) = reader_lock.next_hint(Box::new(|hint| {
+                let Err(_) = reader_lock.next_hint(Box::new(|_| {
                     anyhow::bail!("cb_error");
                 })) else {
                     panic!("Failed to read hint");
@@ -216,6 +216,8 @@ mod tests {
                     .unwrap();
             }
         });
+
+        try_join!(a, b).unwrap();
     }
 
     impl Hint for String {

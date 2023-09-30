@@ -1,10 +1,12 @@
 //! This module contains the [Kernel] struct and its associated methods.
 
+use crate::{gz::compress_bytes, types::Proof};
 use anyhow::{anyhow, Result};
 use cannon_mipsevm::{InstrumentedState, PreimageOracle, StateWitnessHasher};
-use std::{fs, io::Write, time::Instant};
+use std::{fs, io::Write};
 
-use crate::{gz::compress_bytes, traces, types::Proof};
+#[cfg(feature = "tracing")]
+use std::time::Instant;
 
 /// The [Kernel] struct contains the configuration for a Cannon kernel as well as
 /// the [PreimageOracle] and [InstrumentedState] instances that form it.
@@ -62,30 +64,34 @@ where
         }
     }
 
-    pub fn run(&mut self) -> Result<()> {
+    pub fn run(mut self) -> Result<()> {
         let stop_at = create_matcher(self.stop_at.as_ref())?;
         let proof_at = create_matcher(self.proof_at.as_ref())?;
         let snapshot_at = create_matcher(self.snapshot_at.as_ref())?;
-        let info_at = create_matcher(self.info_at.as_ref())?;
 
-        // Capture the startup information for the kernel
-        let start_step = self.ins_state.state.step;
-        let start = Instant::now();
+        #[cfg(feature = "tracing")]
+        let (info_at, start_step, start) = (
+            create_matcher(self.info_at.as_ref())?,
+            self.ins_state.state.step,
+            Instant::now(),
+        );
 
         while !self.ins_state.state.exited {
             let step = self.ins_state.state.step;
 
+            #[cfg(feature = "tracing")]
             if info_at(step) {
                 let delta = start.elapsed();
-                traces::info!(
+                crate::traces::info!(
                     "[ELAPSED: {}.{:03}s] step: {}, pc: {}, instruction: {}, ips: {}, pages: {}, mem: {}",
                     delta.as_secs(),
                     delta.subsec_millis(),
                     step,
                     self.ins_state.state.pc,
+                    self.ins_state.state.memory.get_memory(self.ins_state.state.pc)?,
                     (step - start_step) as f64 / delta.as_secs_f64(),
-                    self.ins_state.state.page_count(),
-                    self.ins_state.state.mem.usage(),
+                    self.ins_state.state.memory.page_count(),
+                    self.ins_state.state.memory.usage(),
                 );
             }
 

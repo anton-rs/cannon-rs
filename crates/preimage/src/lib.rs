@@ -1,5 +1,4 @@
 #![doc = include_str!("../README.md")]
-#![allow(dead_code, unused_variables)]
 
 pub(crate) mod traces;
 

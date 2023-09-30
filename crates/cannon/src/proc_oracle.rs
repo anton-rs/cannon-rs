@@ -11,7 +11,6 @@ use tokio::process::Child;
 /// The [ProcessPreimageOracle] struct represents a preimage oracle process that communicates with
 /// the mipsevm via a few special file descriptors. This process is responsible for preparing and
 /// sending the results of preimage requests to the mipsevm process.
-#[allow(dead_code)]
 pub struct ProcessPreimageOracle {
     /// The preimage oracle client
     pub preimage_client: OracleClient,
