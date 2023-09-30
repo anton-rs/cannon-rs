@@ -15,6 +15,8 @@ pub type Keccak256Key = [u8; 32];
 /// A [LocalIndexKey] is a key local to the program, indexing a special program input.
 pub type LocalIndexKey = u64;
 
+/// The [KeyType] enum represents the different types of keys that can be used to index
+/// pre-images.
 #[repr(u8)]
 pub enum KeyType {
     /// The zero key type is illegal to use.
@@ -23,6 +25,16 @@ pub enum KeyType {
     Local = 1,
     /// The global key type is used to index a global keccak256 preimage.
     GlobalKeccak = 2,
+}
+
+/// The [PreimageFds] enum represents the file descriptors used for hinting and pre-image
+/// communication.
+#[repr(u8)]
+pub enum PreimageFds {
+    HintClientRead = 3,
+    HintClientWrite = 4,
+    PreimageClientRead = 5,
+    PreimageClientWrite = 6,
 }
 
 impl From<u8> for KeyType {
