@@ -1,6 +1,6 @@
 [package]
-name = "cannon-rs"
-description = "Binary crate for cannon-rs"
+name = "cannon"
+description = "An implementation of the OP Stack's native BE MIPS32 VM in Rust"
 edition = "2021"
 
 version.workspace = true
@@ -8,25 +8,17 @@ authors.workspace = true
 
 [dependencies]
 # External
-clap = { version = "4.4.3", features = ["derive"] }
 tracing = "0.1.37"
-tracing-subscriber = "0.3.17"
 anyhow = "1.0.75"
 serde = { version = "1.0.188", features = ["derive"] }
 serde_json = "1.0.107"
 alloy-primitives = "0.4.0"
 tokio = { version = "1.32.0", features = ["macros"] }
 flate2 = "1.0.27"
-async-trait = "0.1.73"
 
 # Local
-cannon = { path = "../crates/cannon" }
-cannon-mipsevm = { path = "../crates/mipsevm" }
-preimage-oracle = { path = "../crates/preimage" }
+cannon-mipsevm = { path = "../mipsevm" }
+preimage-oracle = { path = "../preimage" }
 
 [dev-dependencies]
 proptest = "1.2.0"
-
-[[bin]]
-name = "cannon"
-path = "src/cannon.rs"

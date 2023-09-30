@@ -3,7 +3,6 @@ use anyhow::{anyhow, Result};
 use clap::{ArgAction, Parser};
 use tracing::Level;
 
-mod compressor;
 mod subcommands;
 
 /// Comand line arguments for `cannon` binary

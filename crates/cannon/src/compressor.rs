@@ -1,18 +1,18 @@
-//! This module contains utilities for compressing and decompressing serialized bytes.
+//! This module contains utilities for compressing and decompressing serialized bytes using gzip.
 
 use anyhow::Result;
 use flate2::{bufread::GzDecoder, write::GzEncoder, Compression};
 use std::io::{Read, Write};
 
 /// Compresses a byte slice using gzip.
-pub(crate) fn compress_bytes(bytes: &[u8]) -> Result<Vec<u8>> {
+pub fn compress_bytes(bytes: &[u8]) -> Result<Vec<u8>> {
     let mut encoder = GzEncoder::new(Vec::new(), Compression::best());
     encoder.write_all(bytes)?;
     Ok(encoder.finish()?)
 }
 
 /// Decompresses a byte slice using gzip.
-pub(crate) fn decompress_bytes(compressed_bytes: &[u8]) -> Result<Vec<u8>> {
+pub fn decompress_bytes(compressed_bytes: &[u8]) -> Result<Vec<u8>> {
     let mut decoder = GzDecoder::new(compressed_bytes);
 
     // Give our decompressed buffer the same capacity as the compressed buffer to reduce

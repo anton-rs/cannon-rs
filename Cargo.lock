@@ -58,6 +58,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "alloy-primitives"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6b4084879b7257d5b95b9009837c07a1868bd7d60e66418a7764b9b580ae64e0"
+dependencies = [
+ "alloy-rlp",
+ "bytes",
+ "cfg-if",
+ "const-hex",
+ "derive_more",
+ "hex-literal",
+ "itoa",
+ "proptest",
+ "rand",
+ "ruint",
+ "serde",
+ "tiny-keccak",
+]
+
+[[package]]
 name = "alloy-rlp"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -89,7 +109,7 @@ version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "eaa7c9a4354b1ff9f1c85adf22802af046e20e4bb55e19b9dc6ca8cbc6f7f4e5"
 dependencies = [
- "alloy-primitives",
+ "alloy-primitives 0.3.3",
  "alloy-sol-macro",
  "const-hex",
  "serde",
@@ -414,10 +434,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2bd12c1caf447e69cd4528f47f94d203fd2582878ecb9e9465484c4148a8223"
 
 [[package]]
+name = "cannon"
+version = "0.1.0"
+dependencies = [
+ "alloy-primitives 0.4.0",
+ "anyhow",
+ "cannon-mipsevm",
+ "flate2",
+ "preimage-oracle",
+ "proptest",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "cannon-mipsevm"
 version = "0.1.0"
 dependencies = [
- "alloy-primitives",
+ "alloy-primitives 0.3.3",
  "alloy-sol-types",
  "anyhow",
  "criterion",
@@ -438,9 +474,10 @@ dependencies = [
 name = "cannon-rs"
 version = "0.1.0"
 dependencies = [
- "alloy-primitives",
+ "alloy-primitives 0.4.0",
  "anyhow",
  "async-trait",
+ "cannon",
  "cannon-mipsevm",
  "clap",
  "flate2",
@@ -1483,7 +1520,7 @@ checksum = "5b40af805b3121feab8a3c29f04d8ad262fa8e0561883e7653e024ae4479e6de"
 name = "preimage-oracle"
 version = "0.1.0"
 dependencies = [
- "alloy-primitives",
+ "alloy-primitives 0.4.0",
  "anyhow",
  "once_cell",
  "rand",

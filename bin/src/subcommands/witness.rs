@@ -1,10 +1,10 @@
 //! The `witness` subcommand for the cannon binary
 
 use super::CannonSubcommandDispatcher;
-use crate::compressor::decompress_bytes;
 use alloy_primitives::B256;
 use anyhow::Result;
 use async_trait::async_trait;
+use cannon::compressor::decompress_bytes;
 use cannon_mipsevm::{State, StateWitnessHasher};
 use clap::Args;
 use std::{fs, path::PathBuf};

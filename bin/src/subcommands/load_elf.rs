@@ -1,10 +1,9 @@
 //! The `load-elf` subcommand for the cannon binary
 
-use crate::compressor::compress_bytes;
-
 use super::CannonSubcommandDispatcher;
 use anyhow::Result;
 use async_trait::async_trait;
+use cannon::compressor::compress_bytes;
 use cannon_mipsevm::{load_elf, patch_go, patch_stack};
 use clap::{builder::PossibleValue, Args, ValueEnum};
 use std::{fs, path::PathBuf};

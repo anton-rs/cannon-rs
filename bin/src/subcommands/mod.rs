@@ -24,7 +24,6 @@ pub(crate) enum CannonSubcommand {
 
 #[async_trait]
 impl CannonSubcommandDispatcher for CannonSubcommand {
-    /// TODO(clabby): Dynamic dispatch on Box<dyn CannonSubcommandDispatcher>
     async fn dispatch(&self) -> Result<()> {
         match self {
             CannonSubcommand::Run(args) => args.dispatch().await,
