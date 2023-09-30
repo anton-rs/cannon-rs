@@ -38,7 +38,7 @@ where
             // Resizes the `last_preimage` vec in-place to reduce reallocations.
             self.last_preimage.resize(8 + data.len(), 0);
             self.last_preimage[0..8].copy_from_slice(&data.len().to_be_bytes());
-            self.last_preimage[8..].copy_from_slice(data);
+            self.last_preimage[8..].copy_from_slice(&data);
         }
 
         self.last_preimage_offset = offset;
@@ -306,7 +306,7 @@ where
                                 let hint = &self.state.last_hint[4..4 + hint_len as usize];
 
                                 // TODO(clabby): Ordering could be an issue here.
-                                self.preimage_oracle.hint(hint);
+                                self.preimage_oracle.hint(hint)?;
                                 self.state.last_hint =
                                     self.state.last_hint[4 + hint_len as usize..].into();
                             } else {

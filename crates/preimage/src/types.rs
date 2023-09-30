@@ -1,6 +1,6 @@
 //! This module contains the types for the preimage-oracle crate.
 
-use crate::Key;
+use crate::{Hint, Key};
 use anyhow::Result;
 
 /// A [PreimageGetter] is a function that can be used to fetch pre-images.
@@ -59,6 +59,12 @@ impl Key for LocalIndexKey {
 impl Key for Keccak256Key {
     fn preimage_key(mut self) -> [u8; 32] {
         self[0] = KeyType::GlobalKeccak as u8;
+        self
+    }
+}
+
+impl Hint for &[u8] {
+    fn hint(&self) -> &[u8] {
         self
     }
 }

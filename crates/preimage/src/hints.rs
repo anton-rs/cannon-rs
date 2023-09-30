@@ -14,7 +14,7 @@ unsafe impl Send for HintWriter {}
 unsafe impl Sync for HintWriter {}
 
 impl HintWriter {
-    fn new(io: ReadWritePair) -> Self {
+    pub fn new(io: ReadWritePair) -> Self {
         Self { io }
     }
 }
@@ -44,7 +44,7 @@ unsafe impl Send for HintReader {}
 unsafe impl Sync for HintReader {}
 
 impl HintReader {
-    fn new(io: ReadWritePair) -> Self {
+    pub fn new(io: ReadWritePair) -> Self {
         Self { io }
     }
 }
@@ -98,33 +98,37 @@ mod tests {
         let counter_written = Arc::new(AtomicU32::new(0));
         let counter_received = Arc::new(AtomicU32::new(0));
 
-        let (hints_a, counter_w) = (Arc::new(hints.clone()), Arc::clone(&counter_written));
-        let a = tokio::spawn(async move {
-            for hint in hints_a.iter() {
-                counter_w.fetch_add(1, Ordering::SeqCst);
-                hint_writer.lock().await.hint(hint).unwrap();
+        let a = tokio::spawn({
+            let (hints_a, counter_w) = (Arc::new(hints.clone()), Arc::clone(&counter_written));
+            async move {
+                for hint in hints_a.iter() {
+                    counter_w.fetch_add(1, Ordering::SeqCst);
+                    hint_writer.lock().await.hint(hint).unwrap();
+                }
             }
         });
 
-        let (reader, hints_b, counter_r) = (
-            Arc::clone(&hint_reader),
-            Arc::new(hints.clone()),
-            Arc::clone(&counter_received),
-        );
-        let b = tokio::spawn(async move {
-            for i in 0..hints_b.len() {
-                let counter_r = Arc::clone(&counter_r);
-                match reader.lock().await.next_hint(Box::new(move |hint| {
-                    // Increase the number of hint requests received.
-                    counter_r.fetch_add(1, Ordering::SeqCst);
-                    Ok(())
-                })) {
-                    Ok(eof) => {
-                        if eof {
-                            break;
+        let b = tokio::spawn({
+            let (reader, hints_b, counter_r) = (
+                Arc::clone(&hint_reader),
+                Arc::new(hints.clone()),
+                Arc::clone(&counter_received),
+            );
+            async move {
+                for i in 0..hints_b.len() {
+                    let counter_r = Arc::clone(&counter_r);
+                    match reader.lock().await.next_hint(Box::new(move |hint| {
+                        // Increase the number of hint requests received.
+                        counter_r.fetch_add(1, Ordering::SeqCst);
+                        Ok(())
+                    })) {
+                        Ok(eof) => {
+                            if eof {
+                                break;
+                            }
                         }
+                        Err(e) => panic!("Failed to read hint {}", e),
                     }
-                    Err(e) => panic!("Failed to read hint {}", e),
                 }
             }
         });
@@ -184,29 +188,33 @@ mod tests {
         let hint_writer = Arc::new(Mutex::new(HintWriter::new(a)));
         let hint_reader = Arc::new(Mutex::new(HintReader::new(b)));
 
-        let writer = Arc::clone(&hint_writer);
-        let a = tokio::spawn(async move {
-            let mut writer_lock = writer.lock().await;
-            writer_lock.hint(b"one".to_vec().as_ref()).unwrap();
-            writer_lock.hint(b"two".to_vec().as_ref()).unwrap();
+        let a = tokio::spawn({
+            let writer = Arc::clone(&hint_writer);
+            async move {
+                let mut writer_lock = writer.lock().await;
+                writer_lock.hint::<&[u8]>(b"one".to_vec().as_ref()).unwrap();
+                writer_lock.hint::<&[u8]>(b"two".to_vec().as_ref()).unwrap();
+            }
         });
 
-        let reader = Arc::clone(&hint_reader);
-        let b = tokio::spawn(async move {
-            let mut reader_lock = reader.lock().await;
+        let b = tokio::spawn({
+            let reader = Arc::clone(&hint_reader);
+            async move {
+                let mut reader_lock = reader.lock().await;
 
-            let Err(_) = reader_lock.next_hint(Box::new(|hint| {
-                anyhow::bail!("cb_error");
-            })) else {
-                panic!("Failed to read hint");
-            };
+                let Err(_) = reader_lock.next_hint(Box::new(|hint| {
+                    anyhow::bail!("cb_error");
+                })) else {
+                    panic!("Failed to read hint");
+                };
 
-            reader_lock
-                .next_hint(Box::new(|hint| {
-                    assert_eq!(hint, b"two");
-                    Ok(())
-                }))
-                .unwrap();
+                reader_lock
+                    .next_hint(Box::new(|hint| {
+                        assert_eq!(hint, b"two");
+                        Ok(())
+                    }))
+                    .unwrap();
+            }
         });
     }
 

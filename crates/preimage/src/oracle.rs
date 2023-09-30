@@ -80,41 +80,45 @@ mod test {
         let client = Arc::new(Mutex::new(OracleClient::new(a)));
         let server = Arc::new(Mutex::new(OracleServer::new(b)));
 
-        let mut preimage_by_hash: HashMap<[u8; 32], Vec<u8>> = Default::default();
-        for preimage in preimages.iter() {
-            let k = *keccak256(preimage) as Keccak256Key;
-            preimage_by_hash.insert(k.preimage_key(), preimage.clone());
-        }
-        let preimage_by_hash = Arc::new(preimage_by_hash);
+        let preimage_by_hash = {
+            let mut preimage_by_hash: HashMap<[u8; 32], Vec<u8>> = Default::default();
+            for preimage in preimages.iter() {
+                let k = *keccak256(preimage) as Keccak256Key;
+                preimage_by_hash.insert(k.preimage_key(), preimage.clone());
+            }
+            Arc::new(preimage_by_hash)
+        };
 
         for preimage in preimages.into_iter() {
             let k = *keccak256(preimage) as Keccak256Key;
 
-            let client = Arc::clone(&client);
-            let preimage_by_hash_a = Arc::clone(&preimage_by_hash);
-            let join_a = tokio::task::spawn(async move {
-                // Lock the client
-                let mut cl = client.lock().await;
-                let result = cl.get(k).unwrap();
+            let join_a = tokio::task::spawn({
+                let (client, preimage_by_hash) =
+                    (Arc::clone(&client), Arc::clone(&preimage_by_hash));
+                async move {
+                    // Lock the client
+                    let mut cl = client.lock().await;
+                    let result = cl.get(k).unwrap();
 
-                // Pull the expected value from the map
-                let expected = preimage_by_hash_a.get(&k.preimage_key()).unwrap();
-                assert_eq!(expected, &result);
+                    // Pull the expected value from the map
+                    let expected = preimage_by_hash.get(&k.preimage_key()).unwrap();
+                    assert_eq!(expected, &result);
+                }
             });
 
-            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-
-            let server = Arc::clone(&server);
-            let preimage_by_hash_b = Arc::clone(&preimage_by_hash);
-            let join_b = tokio::task::spawn(async move {
-                // Lock the server
-                let mut server = server.lock().await;
-                server
-                    .new_preimage_request(Box::new(move |key: [u8; 32]| {
-                        let dat = preimage_by_hash_b.get(&key).unwrap();
-                        Ok(dat.clone())
-                    }))
-                    .unwrap();
+            let join_b = tokio::task::spawn({
+                let (server, preimage_by_hash) =
+                    (Arc::clone(&server), Arc::clone(&preimage_by_hash));
+                async move {
+                    // Lock the server
+                    let mut server = server.lock().await;
+                    server
+                        .new_preimage_request(Box::new(move |key: [u8; 32]| {
+                            let dat = preimage_by_hash.get(&key).unwrap();
+                            Ok(dat.clone())
+                        }))
+                        .unwrap();
+                }
             });
 
             tokio::try_join!(join_a, join_b).unwrap();

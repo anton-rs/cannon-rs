@@ -16,7 +16,7 @@ pub trait PreimageOracle {
     ///
     /// ### Takes
     /// - `value`: The preimage to insert.
-    fn hint(&mut self, value: &[u8]);
+    fn hint(&mut self, value: &[u8]) -> Result<()>;
 
     /// Fetch the preimage for the given key.
     ///
@@ -27,5 +27,5 @@ pub trait PreimageOracle {
     /// - `Ok(Some(preimage))`: The preimage for the given key.
     /// - `Ok(None)`: The preimage for the given key does not exist.
     /// - `Err(_)`: An error occurred while fetching the preimage.
-    fn get(&self, key: [u8; 32]) -> Result<&[u8]>;
+    fn get(&mut self, key: [u8; 32]) -> Result<Vec<u8>>;
 }

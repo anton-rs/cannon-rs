@@ -1,8 +1,12 @@
 //! The `run` subcommand for the cannon binary
 
+use std::{fs, io, path::PathBuf};
+
 use super::CannonSubcommandDispatcher;
 use anyhow::Result;
 use async_trait::async_trait;
+use cannon::{compressor, ProcessPreimageOracle};
+use cannon_mipsevm::{InstrumentedState, State};
 use clap::Args;
 
 /// Command line arguments for `cannon run`
@@ -12,6 +16,10 @@ pub(crate) struct RunArgs {
     /// The path to the input JSON state.
     #[arg(long)]
     input: String,
+
+    /// The preimage oracle command
+    #[arg(long, short)]
+    preimage_oracle: String,
 
     /// The path to the output JSON state.
     #[arg(long)]
@@ -54,6 +62,24 @@ pub(crate) struct RunArgs {
 #[async_trait]
 impl CannonSubcommandDispatcher for RunArgs {
     async fn dispatch(&self) -> Result<()> {
+        let raw_state = fs::read(&self.input)?;
+        let state: State = serde_json::from_slice(&compressor::decompress_bytes(&raw_state)?)?;
+
+        let cmd = self
+            .preimage_oracle
+            .split(' ')
+            .map(String::from)
+            .collect::<Vec<_>>();
+        let oracle = ProcessPreimageOracle::new(
+            PathBuf::from(
+                cmd.get(0)
+                    .ok_or(anyhow::anyhow!("Missing preimage server binary path"))?,
+            ),
+            &cmd[1..],
+        );
+
+        let _instrumented = InstrumentedState::new(state, oracle, io::stdout(), io::stderr());
+
         todo!()
     }
 }

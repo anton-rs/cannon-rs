@@ -2,6 +2,7 @@
 
 use crate::{utils::concat_fixed, PreimageOracle};
 use alloy_primitives::{hex, keccak256};
+use anyhow::Result;
 use preimage_oracle::{Keccak256Key, Key, LocalIndexKey};
 use rustc_hash::FxHashMap;
 
@@ -25,15 +26,16 @@ impl StaticOracle {
 }
 
 impl PreimageOracle for StaticOracle {
-    fn hint(&mut self, _value: &[u8]) {
+    fn hint(&mut self, _value: &[u8]) -> Result<()> {
         // noop
+        Ok(())
     }
 
-    fn get(&self, key: [u8; 32]) -> anyhow::Result<&[u8]> {
+    fn get(&mut self, key: [u8; 32]) -> anyhow::Result<Vec<u8>> {
         if key != (key as Keccak256Key).preimage_key() {
             anyhow::bail!("Invalid preimage ")
         }
-        Ok(self.preimage_data.as_slice())
+        Ok(self.preimage_data.clone())
     }
 }
 
@@ -89,7 +91,7 @@ impl Default for ClaimTestOracle {
 }
 
 impl PreimageOracle for ClaimTestOracle {
-    fn hint(&mut self, value: &[u8]) {
+    fn hint(&mut self, value: &[u8]) -> Result<()> {
         let s = String::from_utf8(value.to_vec()).unwrap();
         let parts: Vec<&str> = s.split(' ').collect();
 
@@ -133,12 +135,15 @@ impl PreimageOracle for ClaimTestOracle {
             }
             _ => panic!("Unexpected hint: {}", parts[0]),
         }
+
+        Ok(())
     }
 
-    fn get(&self, key: [u8; 32]) -> anyhow::Result<&[u8]> {
+    fn get(&mut self, key: [u8; 32]) -> anyhow::Result<Vec<u8>> {
         Ok(self
             .images
             .get(&key)
-            .ok_or(anyhow::anyhow!("No image for key"))?)
+            .ok_or(anyhow::anyhow!("No image for key"))?
+            .to_vec())
     }
 }
