@@ -66,8 +66,8 @@ impl FileChannel for ReadWritePair {
 
 /// Helper to create a bidirectional channel through file descriptors opened by this process.
 pub fn create_bidirectional_channel() -> Result<(ReadWritePair, ReadWritePair)> {
-    let (ar, aw) = os_pipe::pipe()?;
-    let (br, bw) = os_pipe::pipe()?;
+    let (ar, bw) = os_pipe::pipe()?;
+    let (br, aw) = os_pipe::pipe()?;
     Ok((
         ReadWritePair::new(unsafe { File::from_raw_fd(ar.into_raw_fd()) }, unsafe {
             File::from_raw_fd(aw.into_raw_fd())
