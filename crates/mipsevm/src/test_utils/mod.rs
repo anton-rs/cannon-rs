@@ -3,7 +3,7 @@
 use crate::{utils::concat_fixed, PreimageOracle};
 use alloy_primitives::{hex, keccak256};
 use anyhow::Result;
-use preimage_oracle::{Keccak256Key, Key, LocalIndexKey};
+use preimage_oracle::{Hint, Keccak256Key, Key, LocalIndexKey};
 use rustc_hash::FxHashMap;
 
 pub mod evm;
@@ -26,7 +26,7 @@ impl StaticOracle {
 }
 
 impl PreimageOracle for StaticOracle {
-    fn hint(&mut self, _value: &[u8]) -> Result<()> {
+    fn hint(&mut self, _value: impl Hint) -> Result<()> {
         // noop
         Ok(())
     }
@@ -91,8 +91,8 @@ impl Default for ClaimTestOracle {
 }
 
 impl PreimageOracle for ClaimTestOracle {
-    fn hint(&mut self, value: &[u8]) -> Result<()> {
-        let s = String::from_utf8(value.to_vec()).unwrap();
+    fn hint(&mut self, value: impl Hint) -> Result<()> {
+        let s = String::from_utf8(value.hint().to_vec()).unwrap();
         let parts: Vec<&str> = s.split(' ').collect();
 
         assert_eq!(parts.len(), 2);

@@ -1,6 +1,7 @@
 //! This module contains the various traits used in this crate.
 
 use anyhow::Result;
+use preimage_oracle::Hint;
 
 /// A [StateWitnessHasher] is a trait describing the functionality of a type
 /// that computes a witness hash.
@@ -16,7 +17,7 @@ pub trait PreimageOracle {
     ///
     /// ### Takes
     /// - `value`: The preimage to insert.
-    fn hint(&mut self, value: &[u8]) -> Result<()>;
+    fn hint(&mut self, value: impl Hint) -> Result<()>;
 
     /// Fetch the preimage for the given key.
     ///

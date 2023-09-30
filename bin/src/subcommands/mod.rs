@@ -11,7 +11,7 @@ mod witness;
 #[async_trait]
 pub(crate) trait CannonSubcommandDispatcher {
     /// Dispatches the subcommand
-    async fn dispatch(&self) -> Result<()>;
+    async fn dispatch(self) -> Result<()>;
 }
 
 /// The subcommands for the `cannon` binary
@@ -24,7 +24,7 @@ pub(crate) enum CannonSubcommand {
 
 #[async_trait]
 impl CannonSubcommandDispatcher for CannonSubcommand {
-    async fn dispatch(&self) -> Result<()> {
+    async fn dispatch(self) -> Result<()> {
         match self {
             CannonSubcommand::Run(args) => args.dispatch().await,
             CannonSubcommand::Witness(args) => args.dispatch().await,

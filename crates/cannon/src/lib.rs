@@ -4,7 +4,7 @@
 mod builder;
 pub use builder::KernelBuilder;
 
-pub mod compressor;
+pub mod gz;
 
 mod kernel;
 pub use kernel::Kernel;
@@ -13,3 +13,5 @@ mod proc_oracle;
 pub use proc_oracle::ProcessPreimageOracle;
 
 mod types;
+
+mod traces;

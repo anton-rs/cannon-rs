@@ -2,7 +2,7 @@
 
 use anyhow::Result;
 use cannon_mipsevm::PreimageOracle;
-use preimage_oracle::{HintWriter, Hinter, Oracle, OracleClient};
+use preimage_oracle::{Hint, HintWriter, Hinter, Oracle, OracleClient};
 use std::os::fd::AsRawFd;
 use std::process::ExitStatus;
 use std::{io, os::fd::RawFd, path::PathBuf};
@@ -22,12 +22,11 @@ pub struct ProcessPreimageOracle {
 }
 
 impl ProcessPreimageOracle {
-    /// Creates a new [PreimageServer] from the given [OracleClient]s.
-    pub fn new(cmd: PathBuf, args: &[String]) -> Self {
-        let (hint_cl_rw, hint_oracle_rw) =
-            preimage_oracle::create_bidirectional_channel().expect("Failed to create hint channel");
-        let (pre_cl_rw, pre_oracle_rw) = preimage_oracle::create_bidirectional_channel()
-            .expect("Failed to create preimage channel");
+    /// Creates a new [PreimageServer] from the given [OracleClient] and [HintWriter] and starts
+    /// the server process.
+    pub fn start(cmd: PathBuf, args: &[String]) -> Result<Self> {
+        let (hint_cl_rw, hint_oracle_rw) = preimage_oracle::create_bidirectional_channel()?;
+        let (pre_cl_rw, pre_oracle_rw) = preimage_oracle::create_bidirectional_channel()?;
 
         unsafe {
             let mut cmd = tokio::process::Command::new(cmd);
@@ -53,13 +52,14 @@ impl ProcessPreimageOracle {
                         }
                     }
                     Ok(())
-                });
+                })
+                .kill_on_drop(true);
 
-            Self {
+            Ok(Self {
                 preimage_client: OracleClient::new(pre_cl_rw),
                 hint_writer_client: HintWriter::new(hint_cl_rw),
-                server: cmd.spawn().expect("Failed to spawn server"),
-            }
+                server: cmd.spawn()?,
+            })
         }
     }
 
@@ -74,7 +74,7 @@ impl ProcessPreimageOracle {
 }
 
 impl PreimageOracle for ProcessPreimageOracle {
-    fn hint(&mut self, value: &[u8]) -> Result<()> {
+    fn hint(&mut self, value: impl Hint) -> Result<()> {
         self.hint_writer_client.hint(value)
     }
 

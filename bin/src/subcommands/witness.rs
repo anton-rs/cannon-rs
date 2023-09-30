@@ -4,7 +4,7 @@ use super::CannonSubcommandDispatcher;
 use alloy_primitives::B256;
 use anyhow::Result;
 use async_trait::async_trait;
-use cannon::compressor::decompress_bytes;
+use cannon::gz::decompress_bytes;
 use cannon_mipsevm::{State, StateWitnessHasher};
 use clap::Args;
 use std::{fs, path::PathBuf};
@@ -24,7 +24,7 @@ pub(crate) struct WitnessArgs {
 
 #[async_trait]
 impl CannonSubcommandDispatcher for WitnessArgs {
-    async fn dispatch(&self) -> Result<()> {
+    async fn dispatch(self) -> Result<()> {
         tracing::info!(target: "cannon-cli::witness", "Loading state JSON dump from {}", self.input.display());
 
         let state_raw = fs::read(&self.input)?;

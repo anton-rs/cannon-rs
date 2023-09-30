@@ -1,25 +1,22 @@
 //! The `run` subcommand for the cannon binary
 
-use std::{fs, io, path::PathBuf};
-
 use super::CannonSubcommandDispatcher;
 use anyhow::Result;
 use async_trait::async_trait;
-use cannon::{compressor, ProcessPreimageOracle};
-use cannon_mipsevm::{InstrumentedState, State};
+use cannon::KernelBuilder;
 use clap::Args;
 
 /// Command line arguments for `cannon run`
 #[derive(Args, Debug)]
 #[command(author, version, about)]
 pub(crate) struct RunArgs {
+    /// The preimage oracle command
+    #[arg(long, short)]
+    preimage_server: String,
+
     /// The path to the input JSON state.
     #[arg(long)]
     input: String,
-
-    /// The preimage oracle command
-    #[arg(long, short)]
-    preimage_oracle: String,
 
     /// The path to the output JSON state.
     #[arg(long)]
@@ -27,7 +24,7 @@ pub(crate) struct RunArgs {
 
     /// The step to generate an output proof at.
     #[arg(long, short)]
-    proof_at: Option<u64>,
+    proof_at: Option<String>,
 
     /// Format for proof data output file names. Proof data is written to stdout
     /// if this is not specified.
@@ -44,42 +41,27 @@ pub(crate) struct RunArgs {
 
     /// The instruction step to stop running at.
     #[arg(long)]
-    stop_at: Option<u64>,
+    stop_at: Option<String>,
 
     /// The pattern to print information at.
     #[arg(long, short)]
     info_at: Option<String>,
-
-    /// An L1 RPC endpoint
-    #[arg(long, aliases = ["le"])]
-    l1_endpoint: String,
-
-    /// An L2 RPC endpoint
-    #[arg(long, aliases = ["la"])]
-    l2_endpoint: String,
 }
 
 #[async_trait]
 impl CannonSubcommandDispatcher for RunArgs {
-    async fn dispatch(&self) -> Result<()> {
-        let raw_state = fs::read(&self.input)?;
-        let state: State = serde_json::from_slice(&compressor::decompress_bytes(&raw_state)?)?;
-
-        let cmd = self
-            .preimage_oracle
-            .split(' ')
-            .map(String::from)
-            .collect::<Vec<_>>();
-        let oracle = ProcessPreimageOracle::new(
-            PathBuf::from(
-                cmd.get(0)
-                    .ok_or(anyhow::anyhow!("Missing preimage server binary path"))?,
-            ),
-            &cmd[1..],
-        );
-
-        let _instrumented = InstrumentedState::new(state, oracle, io::stdout(), io::stderr());
-
-        todo!()
+    async fn dispatch(self) -> Result<()> {
+        let mut kernel = KernelBuilder::default()
+            .with_preimage_server(self.preimage_server)
+            .with_input(self.input)
+            .with_output(self.output)
+            .with_proof_at(self.proof_at)
+            .with_proof_format(self.proof_format)
+            .with_snapshot_at(self.snapshot_at)
+            .with_snapshot_format(self.snapshot_format)
+            .with_stop_at(self.stop_at)
+            .with_info_at(self.info_at)
+            .build()?;
+        kernel.run()
     }
 }

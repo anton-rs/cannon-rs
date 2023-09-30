@@ -337,6 +337,32 @@ impl Memory {
             };
         }
     }
+
+    /// Returns a human-readable string describing the size of the [Memory].
+    ///
+    /// ### Returns
+    /// - A human-readable string describing the size of the [Memory] in B, KiB,
+    ///   MiB, GiB, TiB, PiB, or EiB.
+    pub fn usage(&self) -> String {
+        let total = (self.pages.len() * page::PAGE_SIZE) as u64;
+        const UNIT: u64 = 1024;
+        if total < UNIT {
+            return format!("{} B", total);
+        }
+        let mut div = UNIT;
+        let mut exp = 0;
+        let mut n = total / UNIT;
+        while n >= UNIT {
+            div *= UNIT;
+            exp += 1;
+            n /= UNIT;
+        }
+        format!(
+            "{:.1} {}iB",
+            (total as f64) / (div as f64),
+            ['K', 'M', 'G', 'T', 'P', 'E'][exp]
+        )
+    }
 }
 
 pub struct MemoryReader<'a> {
