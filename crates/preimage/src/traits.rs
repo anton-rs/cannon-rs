@@ -1,11 +1,10 @@
 //! This module contains the traits for the preimage-oracle crate.
 
+use anyhow::Result;
 use std::{
     fs::File,
     io::{Read, Write},
 };
-
-use anyhow::Result;
 
 /// The [Key] trait describes the behavior of a pre-image key that may be wrapped
 /// into a 32-byte type-prefixed key.
