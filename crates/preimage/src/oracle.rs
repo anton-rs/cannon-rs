@@ -1,62 +1,65 @@
 //! This module contains the [Client] struct and its implementation.
 
-use crate::{Oracle, PreimageGetter};
+use crate::{Oracle, PreimageGetter, ReadWritePair};
 use anyhow::Result;
-use std::sync::mpsc::{Receiver, Sender};
+use std::io::{Read, Write};
 
 /// The [OracleClient] is a client that can make requests and write to the [OracleServer].
-/// It contains the [Receiver] for data sent from the server as well as the [Sender] for
-/// data sent to the server.
+/// It contains a [ReadWritePair] that is one half of a bidirectional channel, with the other
+/// half being owned by the [OracleServer].
 pub struct OracleClient {
-    rx: Receiver<Vec<u8>>,
-    tx: Sender<Vec<u8>>,
+    io: ReadWritePair,
 }
 
 impl OracleClient {
-    fn new(rx: Receiver<Vec<u8>>, tx: Sender<Vec<u8>>) -> Self {
-        Self { rx, tx }
+    pub fn new(io: ReadWritePair) -> Self {
+        Self { io }
     }
 }
 
 impl Oracle for OracleClient {
     fn get(&mut self, key: impl crate::Key) -> Result<Vec<u8>> {
         let hash = key.preimage_key();
-        self.tx.send(hash.to_vec())?;
+        self.io.write_all(&hash)?;
 
-        let length = u64::from_be_bytes(self.rx.recv()?.as_slice().try_into()?);
+        let mut length = [0u8; 8];
+        self.io.read_exact(&mut length)?;
+        let length = u64::from_be_bytes(length) as usize;
 
         let payload = if length == 0 {
             Vec::default()
         } else {
-            self.rx.recv()?
+            let mut payload = vec![0u8; length];
+            self.io.read_exact(&mut payload)?;
+            payload
         };
         Ok(payload)
     }
 }
 
 /// The [OracleServer] is a server that can receive requests from the [OracleClient] and
-/// respond to them. It contains the [Receiver] for data sent from the client as well as
-/// the [Sender] for data sent to the client.
+/// respond to them. It contains a [ReadWritePair] that is one half of a bidirectional channel,
+/// with the other half being owned by the [OracleClient].
 pub struct OracleServer {
-    rx: Receiver<Vec<u8>>,
-    tx: Sender<Vec<u8>>,
+    io: ReadWritePair,
 }
 
 impl OracleServer {
-    fn new(rx: Receiver<Vec<u8>>, tx: Sender<Vec<u8>>) -> Self {
-        Self { rx, tx }
+    pub fn new(io: ReadWritePair) -> Self {
+        Self { io }
     }
 }
 
 impl OracleServer {
     pub fn new_preimage_request(&mut self, getter: PreimageGetter) -> Result<()> {
-        let key = self.rx.recv()?.as_slice().try_into()?;
+        let mut key = [0u8; 32];
+        self.io.read_exact(&mut key)?;
 
         let value = getter(key)?;
 
-        self.tx.send((value.len() as u64).to_be_bytes().to_vec())?;
+        self.io.write_all(&(value.len() as u64).to_be_bytes())?;
         if !value.is_empty() {
-            self.tx.send(value)?;
+            self.io.write_all(&value)?;
         }
 
         Ok(())
@@ -72,11 +75,10 @@ mod test {
     use tokio::sync::Mutex;
 
     async fn test_preimage(preimages: Vec<Vec<u8>>) {
-        let (bw, ar) = std::sync::mpsc::channel::<Vec<u8>>();
-        let (aw, br) = std::sync::mpsc::channel::<Vec<u8>>();
+        let (a, b) = crate::create_bidirectional_channel().unwrap();
 
-        let client = Arc::new(Mutex::new(OracleClient::new(ar, aw)));
-        let server = Arc::new(Mutex::new(OracleServer::new(br, bw)));
+        let client = Arc::new(Mutex::new(OracleClient::new(a)));
+        let server = Arc::new(Mutex::new(OracleServer::new(b)));
 
         let mut preimage_by_hash: HashMap<[u8; 32], Vec<u8>> = Default::default();
         for preimage in preimages.iter() {

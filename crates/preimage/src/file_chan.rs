@@ -18,6 +18,14 @@ impl ReadWritePair {
         Self { r, w }
     }
 
+    pub fn reader(&self) -> &File {
+        &self.r
+    }
+
+    pub fn writer(&self) -> &File {
+        &self.w
+    }
+
     /// Helper to create a hinter channel.
     pub fn client_hinter_channel() -> ReadWritePair {
         let r = unsafe { File::from_raw_fd(PreimageFds::HintClientRead as i32) };

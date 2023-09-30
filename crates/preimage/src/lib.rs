@@ -16,6 +16,7 @@ mod hints;
 pub use hints::{HintReader, HintWriter};
 
 mod file_poller;
+pub use file_poller::FilePoller;
 
 mod file_chan;
 pub use file_chan::{create_bidirectional_channel, ReadWritePair};

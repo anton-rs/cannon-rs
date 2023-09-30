@@ -39,7 +39,7 @@ pub trait Hinter {
     ///
     /// ### Returns
     /// - A [Result] indicating whether or not the hint was successfully sent.
-    fn hint<T: Hint>(&self, hint: T) -> Result<()>;
+    fn hint<T: Hint>(&mut self, hint: T) -> Result<()>;
 }
 
 /// The [FileChannel] trait represents a dual channel that can be used to read
