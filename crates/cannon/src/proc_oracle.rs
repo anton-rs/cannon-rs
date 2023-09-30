@@ -1,7 +1,7 @@
 //! This module contains the [PreimageServer] struct and its associated methods.
 
 use cannon_mipsevm::PreimageOracle;
-use preimage_oracle::{FilePoller, OracleClient};
+use preimage_oracle::OracleClient;
 use std::os::fd::AsRawFd;
 use std::{io, os::fd::RawFd, path::PathBuf};
 
@@ -48,8 +48,6 @@ impl ProcessPreimageOracle {
                 })
         };
 
-        // let preimage_client_io = preimage_oracle::FilePoller::new(pre_cl_rw);
-        // let host_client_io = preimage_oracle::FilePoller::new(hint_cl_rw);
         Self {
             preimage_client: OracleClient::new(pre_cl_rw),
             hint_writer_client: OracleClient::new(hint_cl_rw),

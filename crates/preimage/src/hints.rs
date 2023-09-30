@@ -27,7 +27,7 @@ impl Hinter for HintWriter {
         hint_bytes[4..].copy_from_slice(hint);
 
         crate::debug!("Sending hint: {:?}", hint_bytes);
-        self.io.write(&hint_bytes)?;
+        let _ = self.io.write(&hint_bytes)?;
 
         self.io.read_exact(&mut [0])?;
         Ok(())
@@ -69,13 +69,13 @@ impl HintReader {
 
         if let Err(e) = router(&payload) {
             // Write back on error to unblock the hint writer.
-            self.io.write(&[0])?;
+            let _ = self.io.write(&[0])?;
             crate::error!("Failed to handle hint: {:?}", e);
             anyhow::bail!("Failed to handle hint: {:?}", e);
         }
 
         // write back to unblock the hint writer after routing the hint we received.
-        self.io.write(&[0])?;
+        let _ = self.io.write(&[0])?;
         Ok(false)
     }
 }
