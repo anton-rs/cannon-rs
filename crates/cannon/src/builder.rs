@@ -1,7 +1,10 @@
 use crate::Kernel;
+use std::path::PathBuf;
 
 /// The [KernelBuilder] struct is a helper for building a [Kernel] struct.
 pub struct KernelBuilder {
+    /// The path to the preimage oracle server.
+    preimage_server: PathBuf,
     /// The path to the input JSON state.
     input: String,
     /// The path to the output JSON state.

@@ -7,7 +7,7 @@ The interaction between these two processes is fully synchronous. While the emul
 server is blocked on waiting for hints and preimage requests from the emulator. During the time that the preimage oracle server
 is working, the emulator is blocked on waiting for the preimage oracle server to respond.
 
-```
+```text
 ┌───────┐   ┌───────────────┐
 │mipsevm│   │preimage-server│
 └───┬───┘   └───────┬───────┘
