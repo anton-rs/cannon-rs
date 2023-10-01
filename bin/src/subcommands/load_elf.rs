@@ -3,7 +3,6 @@
 use super::CannonSubcommandDispatcher;
 use alloy_primitives::B256;
 use anyhow::Result;
-use async_trait::async_trait;
 use cannon::gz::compress_bytes;
 use cannon_mipsevm::{load_elf, patch_go, patch_stack, StateWitnessHasher};
 use clap::Args;
@@ -54,9 +53,8 @@ impl Display for PatchKind {
     }
 }
 
-#[async_trait]
 impl CannonSubcommandDispatcher for LoadElfArgs {
-    async fn dispatch(self) -> Result<()> {
+    fn dispatch(self) -> Result<()> {
         tracing::info!(target: "cannon-cli::load-elf", "Loading ELF file @ {}", self.path.display());
         let elf_raw = fs::read(&self.path)?;
         let mut state = load_elf(&elf_raw)?;

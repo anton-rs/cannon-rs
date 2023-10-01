@@ -2,7 +2,6 @@
 
 use super::CannonSubcommandDispatcher;
 use anyhow::Result;
-use async_trait::async_trait;
 use cannon::KernelBuilder;
 use clap::Args;
 
@@ -48,9 +47,8 @@ pub(crate) struct RunArgs {
     info_at: Option<String>,
 }
 
-#[async_trait]
 impl CannonSubcommandDispatcher for RunArgs {
-    async fn dispatch(self) -> Result<()> {
+    fn dispatch(self) -> Result<()> {
         let kernel = KernelBuilder::default()
             .with_preimage_server(self.preimage_server.replace('"', ""))
             .with_input(self.input)
