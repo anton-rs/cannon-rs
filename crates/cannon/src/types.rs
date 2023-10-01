@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 
 /// The [Proof] struct contains the data for a Cannon proof at a given instruction.
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Proof {
     pub step: u64,
     pub pre: [u8; 32],

@@ -52,7 +52,7 @@ pub(crate) struct RunArgs {
 impl CannonSubcommandDispatcher for RunArgs {
     async fn dispatch(self) -> Result<()> {
         let kernel = KernelBuilder::default()
-            .with_preimage_server(self.preimage_server.replace("\"", ""))
+            .with_preimage_server(self.preimage_server.replace('"', ""))
             .with_input(self.input)
             .with_output(self.output)
             .with_proof_at(self.proof_at)

@@ -42,18 +42,25 @@ impl KernelBuilder {
         let raw_state = fs::read(&self.input)?;
         let state: State = serde_json::from_slice(&gz::decompress_bytes(&raw_state)?)?;
 
+        let (hint_cl_rw, hint_oracle_rw) = preimage_oracle::create_bidirectional_channel()?;
+        let (pre_cl_rw, pre_oracle_rw) = preimage_oracle::create_bidirectional_channel()?;
+
+        let server_io = [hint_oracle_rw, pre_oracle_rw];
+
         // TODO(clabby): Allow for the preimage server to be configurable.
         let cmd = self
             .preimage_server
             .split(' ')
             .map(String::from)
             .collect::<Vec<_>>();
-        let oracle = ProcessPreimageOracle::start(
+        let (oracle, server_proc) = ProcessPreimageOracle::start(
             PathBuf::from(
                 cmd.get(0)
                     .ok_or(anyhow!("Missing preimage server binary path"))?,
             ),
             &cmd[1..],
+            (hint_cl_rw, pre_cl_rw),
+            &server_io,
         )?;
 
         // TODO(clabby): Allow for the stdout / stderr to be configurable.
@@ -61,6 +68,8 @@ impl KernelBuilder {
 
         Ok(Kernel::new(
             instrumented,
+            server_io,
+            server_proc,
             self.input,
             self.output,
             self.proof_at,

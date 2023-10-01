@@ -23,7 +23,7 @@ impl Hinter for HintWriter {
         hint_bytes[0..4].copy_from_slice((hint.len() as u32).to_be_bytes().as_ref());
         hint_bytes[4..].copy_from_slice(hint);
 
-        crate::debug!("Sending hint: {:?}", hint_bytes);
+        crate::traces::info!(target: "kernel::hinter", "Sending hint: {:?}", hint_bytes);
         let _ = self.io.write(&hint_bytes)?;
 
         self.io.read_exact(&mut [0])?;

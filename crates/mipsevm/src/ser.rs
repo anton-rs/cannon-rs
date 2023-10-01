@@ -32,7 +32,7 @@ macro_rules! fixed_hex_ser {
 }
 
 fixed_hex_ser!(fixed_32_hex, 32);
-fixed_hex_ser!(state_witness_hex, crate::witness::STATE_WITNESS_SIZE);
+// fixed_hex_ser!(state_witness_hex, crate::witness::STATE_WITNESS_SIZE);
 
 pub(crate) mod vec_u8_hex {
     use alloy_primitives::hex;

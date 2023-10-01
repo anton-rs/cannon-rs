@@ -8,11 +8,8 @@ use crate::{
 };
 use anyhow::Result;
 use rustc_hash::FxHashMap;
-use serde::{
-    de::{self, SeqAccess, Visitor},
-    Deserialize, Deserializer, Serialize,
-};
-use std::{cell::RefCell, fmt, io::Read, rc::Rc};
+use serde::{Deserialize, Serialize};
+use std::{cell::RefCell, io::Read, rc::Rc};
 
 /// The [Memory] struct represents the MIPS emulator's memory.
 #[derive(Clone, Debug, Eq, PartialEq)]
