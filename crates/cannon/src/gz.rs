@@ -6,7 +6,7 @@ use std::io::{Read, Write};
 
 /// Compresses a byte slice using gzip.
 pub fn compress_bytes(bytes: &[u8]) -> Result<Vec<u8>> {
-    let mut encoder = GzEncoder::new(Vec::new(), Compression::best());
+    let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
     encoder.write_all(bytes)?;
     Ok(encoder.finish()?)
 }

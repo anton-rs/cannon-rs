@@ -3,7 +3,8 @@
 use crate::{gz::compress_bytes, types::Proof};
 use anyhow::{anyhow, Result};
 use cannon_mipsevm::{InstrumentedState, PreimageOracle, StateWitnessHasher};
-use std::{fs, io::Write};
+use preimage_oracle::ReadWritePair;
+use std::{fs, io::Write, process::Child};
 
 #[cfg(feature = "tracing")]
 use std::time::Instant;
@@ -14,6 +15,12 @@ use std::time::Instant;
 pub struct Kernel<O: Write, E: Write, P: PreimageOracle> {
     /// The instrumented state that the kernel will run.
     ins_state: InstrumentedState<O, E, P>,
+    /// The Kernel and the preimage server's IO. We hold on to these so that they
+    /// are not dropped until the kernel is dropped, keeping the file descriptors
+    /// open.
+    server_io: [ReadWritePair; 2],
+    /// The server's process
+    server_proc: Option<Child>,
     /// The path to the input JSON state.
     input: String,
     /// The path to the output JSON state.
@@ -42,6 +49,8 @@ where
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
         ins_state: InstrumentedState<O, E, P>,
+        server_io: [ReadWritePair; 2],
+        server_proc: Option<Child>,
         input: String,
         output: Option<String>,
         proof_at: Option<String>,
@@ -53,6 +62,8 @@ where
     ) -> Self {
         Self {
             ins_state,
+            server_io,
+            server_proc,
             input,
             output,
             proof_at,
@@ -69,6 +80,9 @@ where
         let proof_at = create_matcher(self.proof_at.as_ref())?;
         let snapshot_at = create_matcher(self.snapshot_at.as_ref())?;
 
+        let proof_fmt = self.proof_format.unwrap_or("%d.json.gz".to_string());
+        let snapshot_fmt = self.snapshot_format.unwrap_or("%d.json.gz".to_string());
+
         #[cfg(feature = "tracing")]
         let (info_at, start_step, start) = (
             create_matcher(self.info_at.as_ref())?,
@@ -83,6 +97,7 @@ where
             if info_at(step) {
                 let delta = start.elapsed();
                 crate::traces::info!(
+                    target: "cannon::kernel",
                     "[ELAPSED: {}.{:03}s] step: {}, pc: {}, instruction: {}, ips: {}, pages: {}, mem: {}",
                     delta.as_secs(),
                     delta.subsec_millis(),
@@ -96,16 +111,23 @@ where
             }
 
             if stop_at(step) {
+                crate::traces::info!(target: "cannon::kernel", "Stopping at step {}", step);
                 break;
             }
 
             if snapshot_at(step) {
+                crate::traces::info!(target: "cannon::kernel", "Writing snapshot at step {}", step);
                 let serialized_state = compress_bytes(&serde_json::to_vec(&self.ins_state.state)?)?;
-                // TODO(clabby): Snapshot format option.
-                fs::write(format!("{}", step), serialized_state)?;
+                fs::write(
+                    snapshot_fmt.replace("%d", &format!("{}", step)),
+                    serialized_state,
+                )?;
+                crate::traces::info!(target: "cannon::kernel", "Wrote snapshot at step {} successfully.", step);
             }
 
             if proof_at(step) {
+                crate::traces::info!(target: "cannon::kernel", "Writing proof at step {}", step);
+
                 let prestate_hash = self.ins_state.state.encode_witness()?.state_hash();
                 let step_witness = self
                     .ins_state
@@ -132,23 +154,44 @@ where
                     proof.oracle_offset = step_witness.preimage_offset;
                 }
 
-                let serialized_proof = compress_bytes(&serde_json::to_vec(&proof)?)?;
-                fs::write(format!("{}", step), serialized_proof)?;
+                let serialized_proof = &serde_json::to_string(&proof)?;
+                fs::write(
+                    proof_fmt.replace("%d", &format!("{}", step)),
+                    serialized_proof,
+                )?;
+
+                crate::traces::info!(target: "cannon::kernel", "Wrote proof at step {} successfully.", step);
             } else {
                 self.ins_state.step(false)?;
+            }
+
+            if let Some(ref mut proc) = self.server_proc {
+                match proc.try_wait() {
+                    Ok(Some(status)) => {
+                        anyhow::bail!("Preimage server exited with status: {}", status);
+                    }
+                    Ok(None) => { /* noop - keep it rollin', preimage server is still listening */ }
+                    Err(e) => {
+                        anyhow::bail!("Failed to wait for preimage server: {}", e)
+                    }
+                }
             }
         }
 
         // Output the final state
         let serialized_state = serde_json::to_vec(&self.ins_state.state)?;
         if let Some(output) = &self.output {
-            fs::write(output, compress_bytes(&serialized_state)?)?;
+            if !output.is_empty() {
+                crate::traces::info!(target: "cannon::kernel", "Writing final state to {}", output);
+                fs::write(output, compress_bytes(&serialized_state)?)?;
+            }
         } else {
             println!("{:?}", String::from_utf8(serialized_state));
         }
 
-        // File descriptors are closed when the kernel struct is dropped, since it owns the oracle
-        // server process and the preimage / hint writer clients.
+        crate::traces::info!(target: "cannon::kernel", "Kernel exiting...");
+
+        // File descriptors are closed when the kernel struct is dropped, since it owns all open IO.
         Ok(())
     }
 }

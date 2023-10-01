@@ -30,4 +30,6 @@ pub use mips::InstrumentedState;
 mod patch;
 pub use patch::{load_elf, patch_go, patch_stack, MultiReader};
 
+mod ser;
+
 pub mod test_utils;

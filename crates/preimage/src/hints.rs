@@ -10,9 +10,6 @@ pub struct HintWriter {
     io: ReadWritePair,
 }
 
-unsafe impl Send for HintWriter {}
-unsafe impl Sync for HintWriter {}
-
 impl HintWriter {
     pub fn new(io: ReadWritePair) -> Self {
         Self { io }
@@ -26,7 +23,6 @@ impl Hinter for HintWriter {
         hint_bytes[0..4].copy_from_slice((hint.len() as u32).to_be_bytes().as_ref());
         hint_bytes[4..].copy_from_slice(hint);
 
-        crate::debug!("Sending hint: {:?}", hint_bytes);
         let _ = self.io.write(&hint_bytes)?;
 
         self.io.read_exact(&mut [0])?;
@@ -39,9 +35,6 @@ impl Hinter for HintWriter {
 pub struct HintReader {
     io: ReadWritePair,
 }
-
-unsafe impl Send for HintReader {}
-unsafe impl Sync for HintReader {}
 
 impl HintReader {
     pub fn new(io: ReadWritePair) -> Self {

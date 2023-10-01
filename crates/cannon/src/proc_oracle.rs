@@ -2,11 +2,14 @@
 
 use anyhow::Result;
 use cannon_mipsevm::PreimageOracle;
-use preimage_oracle::{Hint, HintWriter, Hinter, Oracle, OracleClient};
-use std::os::fd::AsRawFd;
-use std::process::ExitStatus;
-use std::{io, os::fd::RawFd, path::PathBuf};
-use tokio::process::Child;
+use command_fds::{CommandFdExt, FdMapping};
+use preimage_oracle::{Hint, HintWriter, Hinter, Oracle, OracleClient, ReadWritePair};
+use std::{
+    io,
+    os::fd::AsRawFd,
+    path::PathBuf,
+    process::{Child, Command},
+};
 
 /// The [ProcessPreimageOracle] struct represents a preimage oracle process that communicates with
 /// the mipsevm via a few special file descriptors. This process is responsible for preparing and
@@ -16,59 +19,62 @@ pub struct ProcessPreimageOracle {
     pub preimage_client: OracleClient,
     /// The hint writer client
     pub hint_writer_client: HintWriter,
-    /// The preimage oracle server process
-    pub server: Child,
 }
 
 impl ProcessPreimageOracle {
     /// Creates a new [PreimageServer] from the given [OracleClient] and [HintWriter] and starts
     /// the server process.
-    pub fn start(cmd: PathBuf, args: &[String]) -> Result<Self> {
-        let (hint_cl_rw, hint_oracle_rw) = preimage_oracle::create_bidirectional_channel()?;
-        let (pre_cl_rw, pre_oracle_rw) = preimage_oracle::create_bidirectional_channel()?;
+    pub fn start(
+        cmd: PathBuf,
+        args: &[String],
+        client_io: (ReadWritePair, ReadWritePair),
+        server_io: &[ReadWritePair; 2],
+    ) -> Result<(Self, Option<Child>)> {
+        let cmd_str = cmd.display().to_string();
+        let child = (!cmd_str.is_empty()).then(|| {
+            crate::info!(
+                "Starting preimage server process: {} {:?}",
+                cmd.display(),
+                args
+            );
 
-        unsafe {
-            let mut cmd = tokio::process::Command::new(cmd);
-            let cmd = cmd
-                .args(args)
-                .stdout(io::stdout())
-                .stderr(io::stderr())
-                .pre_exec(move || {
-                    // Grab the file descriptors for the hint and preimage channels
-                    // that the server will use to communicate with the mipsevm
-                    let fds = &[
-                        hint_oracle_rw.reader().as_raw_fd(),
-                        hint_oracle_rw.writer().as_raw_fd(),
-                        pre_oracle_rw.reader().as_raw_fd(),
-                        pre_oracle_rw.writer().as_raw_fd(),
-                    ];
+            let mut command = Command::new(cmd);
+            let command = {
+                // Grab the file descriptors for the hint and preimage channels
+                // that the server will use to communicate with the mipsevm
+                let fds = [
+                    server_io[0].reader().as_raw_fd(),
+                    server_io[0].writer().as_raw_fd(),
+                    server_io[1].reader().as_raw_fd(),
+                    server_io[1].writer().as_raw_fd(),
+                ];
 
-                    // Pass along the file descriptors to the child process
-                    for (i, &fd) in fds.iter().enumerate() {
-                        let new_fd = 3 + i as RawFd;
-                        if libc::dup2(fd, new_fd) == -1 {
-                            return Err(io::Error::last_os_error());
-                        }
-                    }
-                    Ok(())
-                })
-                .kill_on_drop(true);
+                crate::traces::info!(target: "cannon::preimage::server", "Starting preimage server process: {:?} with fds {:?}", args, fds);
 
-            Ok(Self {
-                preimage_client: OracleClient::new(pre_cl_rw),
-                hint_writer_client: HintWriter::new(hint_cl_rw),
-                server: cmd.spawn()?,
-            })
-        }
-    }
+                command
+                    .args(args)
+                    .stdout(io::stdout())
+                    .stderr(io::stderr())
+                    .fd_mappings(
+                        fds.iter().enumerate()
+                            .map(|(i, fd)| FdMapping {
+                                parent_fd: *fd,
+                                child_fd: 3 + i as i32,
+                            })
+                            .collect(),
+                    )?
+            };
 
-    pub async fn wait(&mut self) -> Result<ExitStatus> {
-        Ok(self.server.wait().await?)
-    }
+            command.spawn().map_err(|e| anyhow::anyhow!("Failed to start preimage server process: {}", e))
+        });
 
-    pub async fn stop(&mut self) -> Result<()> {
-        self.server.kill().await?;
-        Ok(())
+        Ok((
+            Self {
+                hint_writer_client: HintWriter::new(client_io.0),
+                preimage_client: OracleClient::new(client_io.1),
+            },
+            child.transpose()?,
+        ))
     }
 }
 

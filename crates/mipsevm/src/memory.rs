@@ -1,26 +1,26 @@
 //! The memory module contains the [Memory] data structure and its functionality for the emulator.
 
 use crate::{
-    page::{self, CachedPage},
-    types::SharedCachedPageWrapper,
+    page::{self},
+    types::SharedCachedPage,
     utils::keccak_concat_fixed,
-    Address, Gindex, PageIndex,
+    Address, Gindex, Page, PageIndex,
 };
 use anyhow::Result;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
-use std::{cell::RefCell, io::Read, rc::Rc};
+use std::{io::Read, rc::Rc};
 
 /// The [Memory] struct represents the MIPS emulator's memory.
-#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Memory {
     /// Map of generalized index -> the merkle root of each index. None if invalidated.
-    nodes: FxHashMap<Gindex, Option<[u8; 32]>>,
+    pub nodes: FxHashMap<Gindex, Option<[u8; 32]>>,
     /// Map of page indices to [CachedPage]s.
-    pages: FxHashMap<PageIndex, SharedCachedPageWrapper>,
+    pub pages: FxHashMap<PageIndex, SharedCachedPage>,
     /// We store two caches upfront; we often read instructions from one page and reserve another
     /// for scratch memory. This prevents map lookups for each instruction.
-    last_page: [(PageIndex, Option<SharedCachedPageWrapper>); 2],
+    pub last_page: [(PageIndex, Option<SharedCachedPage>); 2],
 }
 
 impl Default for Memory {
@@ -43,9 +43,9 @@ impl Memory {
     ///
     /// ### Takes
     /// - `f`: A function that takes a [PageIndex] and a shared reference to a [CachedPage].
-    pub fn for_each_page(&mut self, mut f: impl FnMut(PageIndex, Rc<RefCell<CachedPage>>)) {
+    pub fn for_each_page(&mut self, mut f: impl FnMut(PageIndex, SharedCachedPage)) {
         self.pages.iter().for_each(|(key, page)| {
-            f(*key, Rc::clone(&page.0));
+            f(*key, Rc::clone(page));
         });
     }
 
@@ -101,18 +101,16 @@ impl Memory {
     ///
     /// ### Returns
     /// - A reference to the [CachedPage] if it exists.
-    pub fn page_lookup(&mut self, page_index: PageIndex) -> Option<Rc<RefCell<CachedPage>>> {
+    pub fn page_lookup(&mut self, page_index: PageIndex) -> Option<SharedCachedPage> {
         // Check caches before maps
-        if let Some((_, Some(SharedCachedPageWrapper(page)))) =
-            self.last_page.iter().find(|(key, _)| *key == page_index)
-        {
+        if let Some((_, Some(page))) = self.last_page.iter().find(|(key, _)| *key == page_index) {
             Some(Rc::clone(page))
         } else if let Some(page) = self.pages.get(&page_index) {
             // Cache the page
             self.last_page[1] = self.last_page[0].clone();
             self.last_page[0] = (page_index, Some(page.clone()));
 
-            Some(Rc::clone(&page.0))
+            Some(Rc::clone(page))
         } else {
             None
         }
@@ -133,7 +131,7 @@ impl Memory {
                 |page| {
                     let page_g_index =
                         (1 << depth_into_page) | (g_index & ((1 << depth_into_page) - 1));
-                    page.0.borrow_mut().merkleize_subtree(page_g_index)
+                    page.borrow_mut().merkleize_subtree(page_g_index)
                 },
             );
         }
@@ -256,7 +254,7 @@ impl Memory {
             })?;
 
         // Copy the 32 bit value into the page
-        page.borrow_mut().data.0[page_address..page_address + 4]
+        page.borrow_mut().data[page_address..page_address + 4]
             .copy_from_slice(&value.to_be_bytes());
 
         Ok(())
@@ -279,7 +277,7 @@ impl Memory {
             Some(page) => {
                 let page_address = address as usize & page::PAGE_ADDRESS_MASK;
                 Ok(u32::from_be_bytes(
-                    page.borrow().data.0[page_address..page_address + 4].try_into()?,
+                    page.borrow().data[page_address..page_address + 4].try_into()?,
                 ))
             }
             None => Ok(0),
@@ -293,8 +291,8 @@ impl Memory {
     ///
     /// ### Returns
     /// - A reference to the allocated [CachedPage].
-    pub fn alloc_page(&mut self, page_index: PageIndex) -> Result<Rc<RefCell<CachedPage>>> {
-        let page = SharedCachedPageWrapper::default();
+    pub fn alloc_page(&mut self, page_index: PageIndex) -> Result<SharedCachedPage> {
+        let page = SharedCachedPage::default();
         self.pages.insert(page_index, page.clone());
 
         let mut key = (1 << page::PAGE_KEY_SIZE) | page_index;
@@ -302,7 +300,7 @@ impl Memory {
             self.nodes.insert(key, None);
             key >>= 1;
         }
-        Ok(page.0)
+        Ok(page)
     }
 
     /// Set a range of memory in the [Memory] at a given address.
@@ -326,7 +324,7 @@ impl Memory {
                 .unwrap_or_else(|| self.alloc_page(page_index))?;
             page.borrow_mut().invalidate_full();
 
-            match data.read(&mut page.borrow_mut().data.0[page_address..]) {
+            match data.read(&mut page.borrow_mut().data[page_address..]) {
                 Ok(n) => {
                     if n == 0 {
                         return Ok(());
@@ -365,6 +363,69 @@ impl Memory {
     }
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+struct PageEntry {
+    index: PageIndex,
+    #[serde(with = "crate::ser::page_hex")]
+    data: Page,
+}
+
+impl Default for PageEntry {
+    fn default() -> Self {
+        Self {
+            index: Default::default(),
+            data: [0u8; crate::page::PAGE_SIZE],
+        }
+    }
+}
+
+impl Serialize for Memory {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut page_entries: Vec<PageEntry> = self
+            .pages
+            .iter()
+            .map(|(&k, p)| PageEntry {
+                index: k,
+                data: p.borrow().data,
+            })
+            .collect();
+
+        page_entries.sort_by(|a, b| a.index.cmp(&b.index));
+        page_entries.serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for Memory {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let page_entries: Vec<PageEntry> = Vec::deserialize(deserializer)?;
+
+        let mut memory = Memory::default();
+
+        for (i, p) in page_entries.iter().enumerate() {
+            if memory.pages.contains_key(&p.index) {
+                return Err(serde::de::Error::custom(format!(
+                    "cannot load duplicate page, entry {}, page index {}",
+                    i, p.index
+                )));
+            }
+            let page = memory.alloc_page(p.index).map_err(|_| {
+                serde::de::Error::custom("Failed to allocate page in deserialization")
+            })?;
+            let mut page = page.borrow_mut();
+            page.data = p.data;
+            page.invalidate_full();
+        }
+
+        Ok(memory)
+    }
+}
+
 pub struct MemoryReader<'a> {
     memory: &'a mut Memory,
     address: Address,
@@ -399,7 +460,7 @@ impl<'a> Read for MemoryReader<'a> {
         let n = end - start;
         match self.memory.page_lookup(page_index) {
             Some(page) => {
-                std::io::copy(&mut page.borrow().data.0[start..end].as_ref(), &mut buf)?;
+                std::io::copy(&mut page.borrow().data[start..end].as_ref(), &mut buf)?;
             }
             None => {
                 std::io::copy(&mut vec![0; n].as_slice(), &mut buf)?;
@@ -647,7 +708,7 @@ mod test {
 
     mod serialize {
         use super::*;
-        use crate::{types::SharedCachedPageWrapper, Gindex, PageIndex};
+        use crate::{types::SharedCachedPage, Gindex, PageIndex};
         use proptest::{
             prelude::{any, Arbitrary},
             proptest,
@@ -660,7 +721,7 @@ mod test {
             type Strategy = BoxedStrategy<Self>;
 
             fn arbitrary_with(_args: Self::Parameters) -> Self::Strategy {
-                let dummy_page = SharedCachedPageWrapper::default();
+                let dummy_page = SharedCachedPage::default();
 
                 (
                     // Generating random values for nodes
@@ -691,9 +752,15 @@ mod test {
         proptest! {
             #[test]
             fn test_serialize_roundtrip(mut memory: Memory) {
+                let merkle_root_pre = memory.merkle_root().unwrap();
                 let serialized_str = serde_json::to_string(&memory).unwrap();
-                let deserialized_mem: Memory = serde_json::from_str(&serialized_str).unwrap();
-                assert_eq!(memory, deserialized_mem);
+                let mut deserialized_mem: Memory = serde_json::from_str(&serialized_str).unwrap();
+                let merkle_root_post = deserialized_mem.merkle_root().unwrap();
+                assert_eq!(merkle_root_pre, merkle_root_post);
+                for (i, page) in memory.pages.iter() {
+                    let deserialized_page = deserialized_mem.pages.get(i).unwrap();
+                    assert_eq!(page.borrow().data, deserialized_page.borrow().data);
+                }
             }
         }
     }
