@@ -1,11 +1,7 @@
 //! This module contains all of the type aliases and enums used within this crate.
 
-use crate::{page::PAGE_SIZE, CachedPage};
-use serde::{
-    de::{self, SeqAccess, Visitor},
-    ser::SerializeSeq,
-    Deserialize, Deserializer, Serialize, Serializer,
-};
+use crate::CachedPage;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::{cell::RefCell, rc::Rc};
 
 /// A [Page] is a portion of memory of size `PAGE_SIZE`.
@@ -99,70 +95,22 @@ impl TryFrom<u32> for Syscall {
 }
 
 impl Serialize for PageWrapper {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let mut seq = serializer.serialize_seq(Some(self.0.len()))?;
-        for element in self.0 {
-            seq.serialize_element(&element)?;
-        }
-        seq.end()
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_bytes(&self.0)
     }
 }
 
 impl<'de> Deserialize<'de> for PageWrapper {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        struct PageVisitor;
-
-        impl<'de> Visitor<'de> for PageVisitor {
-            type Value = PageWrapper;
-
-            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-                formatter.write_str("a byte array")
-            }
-
-            fn visit_seq<V>(self, mut seq: V) -> Result<PageWrapper, V::Error>
-            where
-                V: SeqAccess<'de>,
-            {
-                let mut page = [0u8; PAGE_SIZE];
-                for (i, page) in page.iter_mut().enumerate().take(PAGE_SIZE) {
-                    *page = seq
-                        .next_element()?
-                        .ok_or_else(|| de::Error::invalid_length(i, &self))?;
-                }
-                Ok(PageWrapper(page))
-            }
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let bytes = Vec::<u8>::deserialize(deserializer)?;
+        if bytes.len() != crate::page::PAGE_SIZE {
+            return Err(serde::de::Error::custom(format!(
+                "Invalid page size: {}",
+                bytes.len()
+            )));
         }
-
-        deserializer.deserialize_seq(PageVisitor)
-    }
-}
-
-impl Serialize for SharedCachedPageWrapper {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        // Borrow the value immutably
-        let value_ref = self.0.borrow();
-        // Serialize the inner value
-        value_ref.serialize(serializer)
-    }
-}
-
-impl<'de> Deserialize<'de> for SharedCachedPageWrapper {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        // Deserialize the inner value
-        let value = CachedPage::deserialize(deserializer)?;
-        // Wrap it in Rc<RefCell<CachedPage>> and return
-        Ok(SharedCachedPageWrapper(Rc::new(RefCell::new(value))))
+        let mut page = [0u8; crate::page::PAGE_SIZE];
+        page.copy_from_slice(&bytes);
+        Ok(Self(page))
     }
 }

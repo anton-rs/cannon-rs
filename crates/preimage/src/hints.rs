@@ -10,9 +10,6 @@ pub struct HintWriter {
     io: ReadWritePair,
 }
 
-unsafe impl Send for HintWriter {}
-unsafe impl Sync for HintWriter {}
-
 impl HintWriter {
     pub fn new(io: ReadWritePair) -> Self {
         Self { io }
@@ -39,9 +36,6 @@ impl Hinter for HintWriter {
 pub struct HintReader {
     io: ReadWritePair,
 }
-
-unsafe impl Send for HintReader {}
-unsafe impl Sync for HintReader {}
 
 impl HintReader {
     pub fn new(io: ReadWritePair) -> Self {

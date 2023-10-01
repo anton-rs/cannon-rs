@@ -4,11 +4,6 @@ use crate::{types::PageWrapper, utils::keccak_concat_fixed, Address, Gindex};
 use alloy_primitives::keccak256;
 use anyhow::Result;
 use once_cell::sync::Lazy;
-use serde::{
-    de::{self, SeqAccess, Visitor},
-    ser::SerializeTuple,
-    Deserialize, Deserializer, Serialize, Serializer,
-};
 
 pub(crate) const PAGE_ADDRESS_SIZE: usize = 12;
 pub(crate) const PAGE_KEY_SIZE: usize = 32 - PAGE_ADDRESS_SIZE;
@@ -138,64 +133,6 @@ impl CachedPage {
         self.valid[g_index] = true;
         self.cache[g_index] = hash;
         Ok(hash)
-    }
-}
-
-impl Serialize for CachedPage {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let mut seq = serializer.serialize_tuple(PAGE_SIZE_WORDS + PAGE_SIZE / 32 + 1)?;
-        seq.serialize_element(&self.data)?;
-        for element in &self.cache {
-            seq.serialize_element(element)?;
-        }
-        for element in &self.valid {
-            seq.serialize_element(element)?;
-        }
-        seq.end()
-    }
-}
-
-impl<'de> Deserialize<'de> for CachedPage {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        struct CachedPageVisitor;
-
-        impl<'de> Visitor<'de> for CachedPageVisitor {
-            type Value = CachedPage;
-
-            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-                formatter.write_str("struct CachedPage")
-            }
-
-            fn visit_seq<V>(self, mut seq: V) -> Result<CachedPage, V::Error>
-            where
-                V: SeqAccess<'de>,
-            {
-                let data = seq
-                    .next_element()?
-                    .ok_or_else(|| de::Error::invalid_length(0, &self))?;
-                let mut cache = [[0u8; 32]; PAGE_SIZE_WORDS];
-                for (i, item) in cache.iter_mut().enumerate().take(PAGE_SIZE_WORDS) {
-                    *item = seq
-                        .next_element()?
-                        .ok_or_else(|| de::Error::invalid_length(i + 1, &self))?;
-                }
-                let mut valid = [false; PAGE_SIZE / 32];
-                for (i, item) in valid.iter_mut().enumerate().take(PAGE_SIZE / 32) {
-                    *item = seq
-                        .next_element()?
-                        .ok_or_else(|| de::Error::invalid_length(PAGE_SIZE_WORDS + i + 1, &self))?;
-                }
-                Ok(CachedPage { data, cache, valid })
-            }
-        }
-
-        deserializer.deserialize_tuple(PAGE_SIZE_WORDS + PAGE_SIZE / 32 + 1, CachedPageVisitor)
     }
 }
 

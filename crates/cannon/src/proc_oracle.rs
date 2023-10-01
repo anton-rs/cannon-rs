@@ -17,7 +17,7 @@ pub struct ProcessPreimageOracle {
     /// The hint writer client
     pub hint_writer_client: HintWriter,
     /// The preimage oracle server process
-    pub server: Child,
+    pub server: Option<Child>,
 }
 
 impl ProcessPreimageOracle {
@@ -27,48 +27,67 @@ impl ProcessPreimageOracle {
         let (hint_cl_rw, hint_oracle_rw) = preimage_oracle::create_bidirectional_channel()?;
         let (pre_cl_rw, pre_oracle_rw) = preimage_oracle::create_bidirectional_channel()?;
 
-        unsafe {
-            let mut cmd = tokio::process::Command::new(cmd);
-            let cmd = cmd
-                .args(args)
-                .stdout(io::stdout())
-                .stderr(io::stderr())
-                .pre_exec(move || {
-                    // Grab the file descriptors for the hint and preimage channels
-                    // that the server will use to communicate with the mipsevm
-                    let fds = &[
-                        hint_oracle_rw.reader().as_raw_fd(),
-                        hint_oracle_rw.writer().as_raw_fd(),
-                        pre_oracle_rw.reader().as_raw_fd(),
-                        pre_oracle_rw.writer().as_raw_fd(),
-                    ];
+        let cmd_str = cmd.display().to_string();
+        let child = (!cmd_str.is_empty()).then(|| {
+            crate::info!(
+                "Starting preimage server process: {} {:?}",
+                cmd.display(),
+                args
+            );
+            let mut command = tokio::process::Command::new(cmd);
+            let command = unsafe {
+                command
+                    .args(args)
+                    .stdout(io::stdout())
+                    .stderr(io::stderr())
+                    .pre_exec(move || {
+                        // Grab the file descriptors for the hint and preimage channels
+                        // that the server will use to communicate with the mipsevm
+                        let fds = &[
+                            hint_oracle_rw.reader().as_raw_fd(),
+                            hint_oracle_rw.writer().as_raw_fd(),
+                            pre_oracle_rw.reader().as_raw_fd(),
+                            pre_oracle_rw.writer().as_raw_fd(),
+                        ];
 
-                    // Pass along the file descriptors to the child process
-                    for (i, &fd) in fds.iter().enumerate() {
-                        let new_fd = 3 + i as RawFd;
-                        if libc::dup2(fd, new_fd) == -1 {
-                            return Err(io::Error::last_os_error());
+                        // Pass along the file descriptors to the child process
+                        for (i, &fd) in fds.iter().enumerate() {
+                            let new_fd = 3 + i as RawFd;
+                            if libc::dup2(fd, new_fd) == -1 {
+                                crate::error!("Failed to dup2 fd {} to {}", fd, new_fd);
+                                return Err(io::Error::last_os_error());
+                            }
                         }
-                    }
-                    Ok(())
-                })
-                .kill_on_drop(true);
+                        Ok(())
+                    })
+                    .kill_on_drop(true)
+            };
 
-            Ok(Self {
-                preimage_client: OracleClient::new(pre_cl_rw),
-                hint_writer_client: HintWriter::new(hint_cl_rw),
-                server: cmd.spawn()?,
-            })
-        }
+            command.spawn().expect("Failed to spawn preimage server")
+        });
+
+        Ok(Self {
+            preimage_client: OracleClient::new(pre_cl_rw),
+            hint_writer_client: HintWriter::new(hint_cl_rw),
+            server: child,
+        })
     }
 
     pub async fn wait(&mut self) -> Result<ExitStatus> {
-        Ok(self.server.wait().await?)
+        if let Some(ref mut server) = self.server {
+            Ok(server.wait().await?)
+        } else {
+            anyhow::bail!("No server to wait on")
+        }
     }
 
     pub async fn stop(&mut self) -> Result<()> {
-        self.server.kill().await?;
-        Ok(())
+        if let Some(ref mut server) = self.server {
+            server.kill().await?;
+            Ok(())
+        } else {
+            anyhow::bail!("No server to stop")
+        }
     }
 }
 

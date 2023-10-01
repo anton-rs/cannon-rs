@@ -1,13 +1,13 @@
 use crate::subcommands::CannonSubcommandDispatcher;
 use anyhow::{anyhow, Result};
-use clap::{ArgAction, Parser};
+use clap::{ArgAction, ColorChoice, Parser};
 use tracing::Level;
 
 mod subcommands;
 
 /// Comand line arguments for `cannon` binary
 #[derive(Parser, Debug)]
-#[command(author, version, about)]
+#[command(author, version, about, color = ColorChoice::Always)]
 struct Args {
     /// Verbosity level (0-4)
     #[arg(long, short, action = ArgAction::Count, default_value = "2")]

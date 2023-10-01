@@ -1,26 +1,29 @@
 //! The memory module contains the [Memory] data structure and its functionality for the emulator.
 
 use crate::{
-    page::{self, CachedPage},
-    types::SharedCachedPageWrapper,
+    page::{self, CachedPage, PAGE_SIZE},
+    types::{PageWrapper, SharedCachedPageWrapper},
     utils::keccak_concat_fixed,
     Address, Gindex, PageIndex,
 };
 use anyhow::Result;
 use rustc_hash::FxHashMap;
-use serde::{Deserialize, Serialize};
-use std::{cell::RefCell, io::Read, rc::Rc};
+use serde::{
+    de::{self, SeqAccess, Visitor},
+    Deserialize, Deserializer, Serialize,
+};
+use std::{cell::RefCell, fmt, io::Read, rc::Rc};
 
 /// The [Memory] struct represents the MIPS emulator's memory.
-#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Memory {
     /// Map of generalized index -> the merkle root of each index. None if invalidated.
-    nodes: FxHashMap<Gindex, Option<[u8; 32]>>,
+    pub nodes: FxHashMap<Gindex, Option<[u8; 32]>>,
     /// Map of page indices to [CachedPage]s.
-    pages: FxHashMap<PageIndex, SharedCachedPageWrapper>,
+    pub pages: FxHashMap<PageIndex, SharedCachedPageWrapper>,
     /// We store two caches upfront; we often read instructions from one page and reserve another
     /// for scratch memory. This prevents map lookups for each instruction.
-    last_page: [(PageIndex, Option<SharedCachedPageWrapper>); 2],
+    pub last_page: [(PageIndex, Option<SharedCachedPageWrapper>); 2],
 }
 
 impl Default for Memory {
@@ -365,6 +368,68 @@ impl Memory {
     }
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+struct PageEntry {
+    index: PageIndex,
+    data: PageWrapper,
+}
+
+impl Default for PageEntry {
+    fn default() -> Self {
+        Self {
+            index: Default::default(),
+            data: PageWrapper([0u8; PAGE_SIZE]),
+        }
+    }
+}
+
+impl Serialize for Memory {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut page_entries: Vec<PageEntry> = self
+            .pages
+            .iter()
+            .map(|(&k, p)| PageEntry {
+                index: k,
+                data: p.0.borrow().data,
+            })
+            .collect();
+
+        page_entries.sort_by(|a, b| a.index.cmp(&b.index));
+        page_entries.serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for Memory {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let page_entries: Vec<PageEntry> = Vec::deserialize(deserializer)?;
+
+        let mut memory = Memory::default();
+
+        for (i, p) in page_entries.iter().enumerate() {
+            if memory.pages.contains_key(&p.index) {
+                return Err(serde::de::Error::custom(format!(
+                    "cannot load duplicate page, entry {}, page index {}",
+                    i, p.index
+                )));
+            }
+            let page = memory.alloc_page(p.index).map_err(|_| {
+                serde::de::Error::custom("Failed to allocate page in deserialization")
+            })?;
+            let mut page = page.borrow_mut();
+            page.data = p.data;
+            page.invalidate_full();
+        }
+
+        Ok(memory)
+    }
+}
+
 pub struct MemoryReader<'a> {
     memory: &'a mut Memory,
     address: Address,
@@ -691,9 +756,15 @@ mod test {
         proptest! {
             #[test]
             fn test_serialize_roundtrip(mut memory: Memory) {
+                let merkle_root_pre = memory.merkle_root().unwrap();
                 let serialized_str = serde_json::to_string(&memory).unwrap();
-                let deserialized_mem: Memory = serde_json::from_str(&serialized_str).unwrap();
-                assert_eq!(memory, deserialized_mem);
+                let mut deserialized_mem: Memory = serde_json::from_str(&serialized_str).unwrap();
+                let merkle_root_post = deserialized_mem.merkle_root().unwrap();
+                assert_eq!(merkle_root_pre, merkle_root_post);
+                for (i, page) in memory.pages.iter() {
+                    let deserialized_page = deserialized_mem.pages.get(i).unwrap();
+                    assert_eq!(page.0.borrow().data, deserialized_page.0.borrow().data);
+                }
             }
         }
     }
