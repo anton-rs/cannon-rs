@@ -1,19 +1,13 @@
 //! This module contains all of the type aliases and enums used within this crate.
 
 use crate::CachedPage;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::{cell::RefCell, rc::Rc};
 
 /// A [Page] is a portion of memory of size `PAGE_SIZE`.
 pub type Page = [u8; crate::page::PAGE_SIZE];
 
-/// A wrapper around the [Page] type for serialization and deserialization.
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub struct PageWrapper(pub Page);
-
-/// A wrapper around a shared [CachedPage] type for serialization and deserialization.
-#[derive(Debug, Clone, Eq, PartialEq, Default)]
-pub struct SharedCachedPageWrapper(pub Rc<RefCell<CachedPage>>);
+/// A [CachedPage] with shared ownership.
+pub type SharedCachedPage = Rc<RefCell<CachedPage>>;
 
 /// A [StateWitness] is an encoded commitment to the current [crate::State] of the MIPS emulator.
 pub type StateWitness = [u8; crate::witness::STATE_WITNESS_SIZE];
@@ -91,26 +85,5 @@ impl TryFrom<u32> for Syscall {
             4055 => Ok(Syscall::Fcntl),
             _ => anyhow::bail!("Failed to convert {} to Syscall", n),
         }
-    }
-}
-
-impl Serialize for PageWrapper {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_bytes(&self.0)
-    }
-}
-
-impl<'de> Deserialize<'de> for PageWrapper {
-    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let bytes = Vec::<u8>::deserialize(deserializer)?;
-        if bytes.len() != crate::page::PAGE_SIZE {
-            return Err(serde::de::Error::custom(format!(
-                "Invalid page size: {}",
-                bytes.len()
-            )));
-        }
-        let mut page = [0u8; crate::page::PAGE_SIZE];
-        page.copy_from_slice(&bytes);
-        Ok(Self(page))
     }
 }

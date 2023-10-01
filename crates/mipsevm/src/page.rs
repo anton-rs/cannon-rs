@@ -1,6 +1,6 @@
 //! This module contains the data structure for a [Page] within the MIPS emulator's [Memory].
 
-use crate::{types::PageWrapper, utils::keccak_concat_fixed, Address, Gindex};
+use crate::{utils::keccak_concat_fixed, Address, Gindex, Page};
 use alloy_primitives::keccak256;
 use anyhow::Result;
 use once_cell::sync::Lazy;
@@ -25,7 +25,7 @@ pub(crate) static ZERO_HASHES: Lazy<[[u8; 32]; 256]> = Lazy::new(|| {
 /// Precomputed cache of a merkleized page with all zero data.
 pub(crate) static DEFAULT_CACHE: Lazy<[[u8; 32]; PAGE_SIZE_WORDS]> = Lazy::new(|| {
     let mut page = CachedPage {
-        data: PageWrapper([0; PAGE_SIZE]),
+        data: [0; PAGE_SIZE],
         cache: [[0; 32]; PAGE_SIZE_WORDS],
         valid: [false; PAGE_SIZE / 32],
     };
@@ -36,7 +36,7 @@ pub(crate) static DEFAULT_CACHE: Lazy<[[u8; 32]; PAGE_SIZE_WORDS]> = Lazy::new(|
 /// A [CachedPage] is a [Page] with an in-memory cache of intermediate nodes.
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub struct CachedPage {
-    pub data: PageWrapper,
+    pub data: Page,
     /// Storage for intermediate nodes
     pub cache: [[u8; 32]; PAGE_SIZE_WORDS],
     /// Bitmap for 128 nodes. 1 if valid, 0 if invalid.
@@ -46,7 +46,7 @@ pub struct CachedPage {
 impl Default for CachedPage {
     fn default() -> Self {
         Self {
-            data: PageWrapper([0; PAGE_SIZE]),
+            data: [0; PAGE_SIZE],
             cache: *DEFAULT_CACHE,
             valid: [true; PAGE_SIZE / 32],
         }
@@ -108,7 +108,7 @@ impl CachedPage {
 
         if (PAGE_SIZE_WORDS..PAGE_SIZE_WORDS * 2).contains(&g_index) {
             let node_index = (g_index & (PAGE_ADDRESS_MASK >> 5)) << 5;
-            return Ok(self.data.0[node_index..node_index + 32].try_into()?);
+            return Ok(self.data[node_index..node_index + 32].try_into()?);
         } else if g_index >= PAGE_SIZE_WORDS * 2 {
             anyhow::bail!("Generalized index is too deep: {}", g_index);
         } else if self.valid[g_index] {
@@ -118,7 +118,7 @@ impl CachedPage {
         let hash = if g_index >= PAGE_SIZE_WORDS >> 1 {
             // This is a leaf node.
             let data_idx = (g_index - (PAGE_SIZE_WORDS >> 1)) << 6;
-            *keccak256(&self.data.0[data_idx..data_idx + 64])
+            *keccak256(&self.data[data_idx..data_idx + 64])
         } else {
             // This is an internal node.
             let left_child = g_index << 1;
@@ -143,7 +143,7 @@ mod test {
     #[test]
     fn cached_page_static() {
         let mut page = CachedPage::default();
-        page.data.0[42] = 0xab;
+        page.data[42] = 0xab;
         page.invalidate(42).unwrap();
 
         let g_index = ((1 << PAGE_ADDRESS_SIZE) | 42) >> 5;
@@ -162,7 +162,7 @@ mod test {
         assert_eq!(node, expected_grandparent, "Grandparent should be correct");
 
         let pre = page.merkle_root().unwrap();
-        page.data.0[42] = 0xcd;
+        page.data[42] = 0xcd;
         let post = page.merkle_root().unwrap();
         assert_eq!(
             pre, post,
@@ -176,7 +176,7 @@ mod test {
             "Pre and post state should be different after cache invalidation"
         );
 
-        page.data.0[2000] = 0xef;
+        page.data[2000] = 0xef;
         page.invalidate(42).unwrap();
         let post_c = page.merkle_root().unwrap();
         assert_eq!(
@@ -191,7 +191,7 @@ mod test {
             "Multiple invalidations should change the root."
         );
 
-        page.data.0[1000] = 0xff;
+        page.data[1000] = 0xff;
         page.invalidate_full();
         let post_e = page.merkle_root().unwrap();
         assert_ne!(
