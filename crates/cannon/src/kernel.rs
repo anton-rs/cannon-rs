@@ -3,7 +3,10 @@
 use crate::{gz::compress_bytes, types::Proof, ChildWithFds};
 use anyhow::{anyhow, Result};
 use cannon_mipsevm::{InstrumentedState, PreimageOracle, StateWitnessHasher};
-use std::{fs, io::Write};
+use std::{
+    fs::File,
+    io::{BufWriter, Write},
+};
 use tokio::{runtime::Runtime, task::JoinHandle};
 
 #[cfg(feature = "tracing")]
@@ -120,10 +123,11 @@ where
                 if snapshot_at.matches(step) {
                     crate::traces::info!(target: "cannon::kernel", "Writing snapshot at step {}", step);
                     let ser_state = serde_json::to_vec(&self.ins_state.state).unwrap();
-                    let file_path = snapshot_fmt.replace("%d", &format!("{}", step));
+                    let snap_path = snapshot_fmt.replace("%d", &format!("{}", step));
                     io_tasks.push(tokio::task::spawn(async move {
-                        let cmp = compress_bytes(&ser_state)?;
-                        fs::write(file_path, cmp)?;
+                        let gz_state = compress_bytes(&ser_state)?;
+                        let mut writer = BufWriter::new(File::create(snap_path)?);
+                        writer.write_all(&gz_state)?;
                         crate::traces::info!(target: "cannon::kernel", "Wrote snapshot at step {} successfully.", step);
 
                         Ok(())
@@ -158,11 +162,9 @@ where
                             }
                         };
 
-                        let serialized_proof = &serde_json::to_string(&proof)?;
-                        fs::write(
-                            proof_path,
-                            serialized_proof,
-                        )?;
+                        let ser_proof = &serde_json::to_string(&proof)?;
+                        let mut writer = BufWriter::new(File::create(proof_path)?);
+                        writer.write_all(ser_proof.as_bytes())?;
 
                         crate::traces::info!(target: "cannon::kernel", "Wrote proof at step {} successfully.", step);
 
@@ -195,10 +197,12 @@ where
             if let Some(output) = &self.output {
                 if !output.is_empty() {
                     crate::traces::info!(target: "cannon::kernel", "Writing final state to {}", output);
-                    fs::write(
-                        output,
-                        compress_bytes(&serde_json::to_vec(&self.ins_state.state)?)?,
-                    )?;
+                    let mut writer = BufWriter::new(File::create(output)?);
+
+                    let ser_state = &serde_json::to_vec(&self.ins_state.state)?;
+                    let gz_state = compress_bytes(ser_state)?;
+
+                    writer.write_all(&gz_state)?;
                 }
             } else {
                 println!("{:?}", &self.ins_state.state);

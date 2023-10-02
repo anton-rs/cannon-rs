@@ -8,7 +8,7 @@ use crate::{
     Address, Fd, InstrumentedState, PreimageOracle,
 };
 use anyhow::Result;
-use std::io::{self, Cursor, Read, Write};
+use std::io::{self, BufReader, Read, Write};
 
 impl<O, E, P> InstrumentedState<O, E, P>
 where
@@ -44,11 +44,9 @@ where
 
         self.last_preimage_offset = offset;
 
-        // TODO(clabby): This could be problematic if the `Cursor`'s read function returns
-        // 0 as EOF rather than the amount of bytes read into `data`.
         let mut data = [0u8; 32];
         let data_len =
-            Cursor::new(&self.last_preimage[offset as usize..]).read(data.as_mut_slice())?;
+            BufReader::new(&self.last_preimage[offset as usize..]).read(data.as_mut_slice())?;
         Ok((data, data_len))
     }
 

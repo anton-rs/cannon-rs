@@ -6,7 +6,13 @@ use anyhow::Result;
 use cannon::gz::compress_bytes;
 use cannon_mipsevm::{load_elf, patch_go, patch_stack, StateWitnessHasher};
 use clap::Args;
-use std::{fmt::Display, fs, path::PathBuf, str::FromStr};
+use std::{
+    fmt::Display,
+    fs::File,
+    io::{BufReader, BufWriter, Read, Write},
+    path::PathBuf,
+    str::FromStr,
+};
 
 /// Command line arguments for `cannon load-elf`
 #[derive(Args, Debug)]
@@ -56,7 +62,11 @@ impl Display for PatchKind {
 impl CannonSubcommandDispatcher for LoadElfArgs {
     fn dispatch(self) -> Result<()> {
         tracing::info!(target: "cannon-cli::load-elf", "Loading ELF file @ {}", self.path.display());
-        let elf_raw = fs::read(&self.path)?;
+        let file = File::open(&self.path)?;
+        let file_sz = file.metadata()?.len();
+        let mut reader = BufReader::new(file);
+        let mut elf_raw = Vec::with_capacity(file_sz as usize);
+        reader.read_to_end(&mut elf_raw)?;
         let mut state = load_elf(&elf_raw)?;
         tracing::info!(target: "cannon-cli::load-elf", "Loaded ELF file and constructed the State");
 
@@ -72,7 +82,10 @@ impl CannonSubcommandDispatcher for LoadElfArgs {
             if path_str == "-" {
                 println!("{}", serde_json::to_string(&state)?);
             } else {
-                fs::write(path_str, compress_bytes(&serde_json::to_vec(&state)?)?)?;
+                let mut writer = BufWriter::new(File::create(path_str)?);
+                let ser_state = serde_json::to_vec(&state)?;
+                let gz_state = compress_bytes(&ser_state)?;
+                writer.write_all(&gz_state)?;
             }
         }
 

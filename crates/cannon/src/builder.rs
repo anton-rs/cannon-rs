@@ -4,8 +4,8 @@ use crate::{gz, ChildWithFds, Kernel, ProcessPreimageOracle};
 use anyhow::{anyhow, Result};
 use cannon_mipsevm::{InstrumentedState, State};
 use std::{
-    fs,
-    io::{self, Stderr, Stdout},
+    fs::{self, File},
+    io::{self, BufReader, Read, Stderr, Stdout},
     path::PathBuf,
 };
 
@@ -39,6 +39,13 @@ impl KernelBuilder {
     /// TODO(clabby): Make the i/o streams + the preimage oracle configurable.
     pub fn build(self) -> Result<Kernel<Stdout, Stderr, ProcessPreimageOracle>> {
         // Read the compressed state dump from the input file, decompress it, and deserialize it.
+        let f = File::open(&self.input)?;
+        let f_sz = f.metadata()?.len();
+        let mut reader = BufReader::new(f);
+        // Give a reasonable capacity to the vector to avoid too many reallocations. The size of the file
+        // is the size of the compressed state dump, so we will still reallocate.
+        let mut raw_state = Vec::with_capacity(f_sz as usize);
+        reader.read_to_end(&mut raw_state)?;
         let raw_state = fs::read(&self.input)?;
         let state: State = serde_json::from_slice(&gz::decompress_bytes(&raw_state)?)?;
 
