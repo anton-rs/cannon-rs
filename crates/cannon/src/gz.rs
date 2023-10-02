@@ -5,8 +5,9 @@ use flate2::{bufread::GzDecoder, write::GzEncoder, Compression};
 use std::io::{Read, Write};
 
 /// Compresses a byte slice using gzip.
+#[inline(always)]
 pub fn compress_bytes(bytes: &[u8]) -> Result<Vec<u8>> {
-    let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
+    let mut encoder = GzEncoder::new(Vec::with_capacity(bytes.len()), Compression::default());
     encoder.write_all(bytes)?;
     Ok(encoder.finish()?)
 }

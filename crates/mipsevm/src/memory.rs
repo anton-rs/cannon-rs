@@ -228,6 +228,7 @@ impl Memory {
     ///
     /// ### Returns
     /// - A [Result] indicating if the operation was successful.
+    #[inline(always)]
     pub fn set_memory(&mut self, address: Address, value: u32) -> Result<()> {
         // Address must be aligned to 4 bytes
         if address & 0x3 != 0 {
@@ -267,6 +268,7 @@ impl Memory {
     ///
     /// ### Returns
     /// - The 32 bit value at the given address.
+    #[inline(always)]
     pub fn get_memory(&mut self, address: Address) -> Result<u32> {
         // Address must be aligned to 4 bytes
         if address & 0x3 != 0 {

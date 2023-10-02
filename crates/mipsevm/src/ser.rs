@@ -3,7 +3,7 @@
 /// Generates a hex string serialization module for a fixed-size byte array.
 macro_rules! fixed_hex_ser {
     ($module_name:ident, $size:expr) => {
-        pub(crate) mod $module_name {
+        pub mod $module_name {
             use alloy_primitives::hex;
             use serde::{self, Deserialize, Deserializer, Serializer};
 
@@ -33,9 +33,9 @@ macro_rules! fixed_hex_ser {
 
 fixed_hex_ser!(fixed_32_hex, 32);
 fixed_hex_ser!(page_hex, crate::page::PAGE_SIZE);
-// fixed_hex_ser!(state_witness_hex, crate::witness::STATE_WITNESS_SIZE);
+fixed_hex_ser!(state_witness_hex, crate::witness::STATE_WITNESS_SIZE);
 
-pub(crate) mod vec_u8_hex {
+pub mod vec_u8_hex {
     use alloy_primitives::hex;
     use serde::{self, Deserialize, Deserializer, Serializer};
 

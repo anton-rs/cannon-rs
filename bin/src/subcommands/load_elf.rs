@@ -76,7 +76,7 @@ impl CannonSubcommandDispatcher for LoadElfArgs {
             }
         }
 
-        tracing::info!(target: "cannon-cli::load-elf", "Patched the ELF file and dumped the State successfully. State hash: {}", B256::from(state.encode_witness()?.state_hash()));
+        tracing::info!(target: "cannon-cli::load-elf", "Patched the ELF file and dumped the State successfully. state hash: {} mem size: {} pages: {}", B256::from(state.encode_witness()?.state_hash()), state.memory.usage(), state.memory.page_count());
 
         Ok(())
     }

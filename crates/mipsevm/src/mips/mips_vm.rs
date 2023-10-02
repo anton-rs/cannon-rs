@@ -25,6 +25,7 @@ where
     /// ### Returns
     /// - `Ok((data, data_len))`: The preimage data and length.
     /// - `Err(_)`: An error occurred while fetching the preimage.
+    #[inline(always)]
     pub(crate) fn read_preimage(
         &mut self,
         key: [u8; 32],
@@ -58,6 +59,7 @@ where
     ///
     /// ### Returns
     /// - A [Result] indicating if the operation was successful.
+    #[inline(always)]
     pub(crate) fn track_mem_access(&mut self, effective_address: Address) -> Result<()> {
         if self.mem_proof_enabled && self.last_mem_access != effective_address {
             if self.last_mem_access != Address::MAX {
@@ -74,6 +76,7 @@ where
     ///
     /// ### Returns
     /// - A [Result] indicating if the step was successful.
+    #[inline(always)]
     pub(crate) fn inner_step(&mut self) -> Result<()> {
         if self.state.exited {
             return Ok(());
@@ -197,6 +200,7 @@ where
     ///
     /// ### Returns
     /// - A [Result] indicating if the syscall dispatch was successful.
+    #[inline(always)]
     pub(crate) fn handle_syscall(&mut self) -> Result<()> {
         let mut v0 = 0;
         let mut v1 = 0;
@@ -389,6 +393,7 @@ where
     ///
     /// ### Returns
     /// - A [Result] indicating if the branch dispatch was successful.
+    #[inline(always)]
     pub(crate) fn handle_branch(
         &mut self,
         opcode: u32,
@@ -450,6 +455,7 @@ where
     ///
     /// ### Returns
     /// - A [Result] indicating if the branch dispatch was successful.
+    #[inline(always)]
     pub(crate) fn handle_hi_lo(
         &mut self,
         fun: u32,
@@ -523,6 +529,7 @@ where
     ///
     /// ### Returns
     /// - A [Result] indicating if the branch dispatch was successful.
+    #[inline(always)]
     pub(crate) fn handle_jump(&mut self, link_reg: u32, dest: u32) -> Result<()> {
         if self.state.next_pc != self.state.pc + 4 {
             anyhow::bail!("Unexpected jump in delay slot at {:x}", self.state.pc);
@@ -546,6 +553,7 @@ where
     ///
     /// ### Returns
     /// - A [Result] indicating if the branch dispatch was successful.
+    #[inline(always)]
     pub(crate) fn handle_rd(&mut self, store_reg: u32, val: u32, conditional: bool) -> Result<()> {
         if store_reg >= 32 {
             anyhow::bail!("Invalid register index {}", store_reg);
@@ -571,6 +579,7 @@ where
     /// ### Returns
     /// - `Ok(n)` - The result of the instruction execution.
     /// - `Err(_)`: An error occurred while executing the instruction.
+    #[inline(always)]
     pub(crate) fn execute(&mut self, instruction: u32, rs: u32, rt: u32, mem: u32) -> Result<u32> {
         // Opcodes in MIPS are 6 bits in size, and stored in the high-order bits of the big-endian
         // instruction.
@@ -738,6 +747,7 @@ where
 ///
 /// ### Returns
 /// - The sign extended value.
+#[inline(always)]
 pub(crate) fn sign_extend(data: u32, index: u32) -> u32 {
     let is_signed = (data >> (index - 1)) != 0;
     let signed = ((1 << (32 - index)) - 1) << index;
