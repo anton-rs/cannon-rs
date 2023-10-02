@@ -12,6 +12,9 @@ pub type HintHandler = Box<dyn Fn(&[u8]) -> Result<()>>;
 /// A [Keccak256Key] wraps a keccak256 hash to use it as a typed pre-image key.
 pub type Keccak256Key = [u8; 32];
 
+/// A [RawKey] wraps a raw 32-byte key which remains unaffected in the [Key] trait impl.
+pub struct RawKey(pub [u8; 32]);
+
 /// A [LocalIndexKey] is a key local to the program, indexing a special program input.
 pub type LocalIndexKey = u64;
 
@@ -60,6 +63,12 @@ impl Key for Keccak256Key {
     fn preimage_key(mut self) -> [u8; 32] {
         self[0] = KeyType::GlobalKeccak as u8;
         self
+    }
+}
+
+impl Key for RawKey {
+    fn preimage_key(self) -> [u8; 32] {
+        self.0
     }
 }
 

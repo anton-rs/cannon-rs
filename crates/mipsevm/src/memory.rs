@@ -374,7 +374,7 @@ impl Default for PageEntry {
     fn default() -> Self {
         Self {
             index: Default::default(),
-            data: [0u8; crate::page::PAGE_SIZE],
+            data: [0u8; page::PAGE_SIZE],
         }
     }
 }
@@ -474,8 +474,7 @@ impl<'a> Read for MemoryReader<'a> {
 
 #[cfg(test)]
 mod test {
-    use super::Memory;
-    use crate::{memory::Address, page, utils::keccak_concat_fixed};
+    use super::*;
 
     mod merkle_proof {
         use super::*;
@@ -488,7 +487,7 @@ mod test {
             assert_eq!([0xaa, 0xbb, 0xcc, 0xdd], proof[..4]);
             (0..32 - 5).for_each(|i| {
                 let start = 32 + i * 32;
-                assert_eq!(crate::page::ZERO_HASHES[i], proof[start..start + 32]);
+                assert_eq!(page::ZERO_HASHES[i], proof[start..start + 32]);
             });
         }
 
@@ -524,7 +523,7 @@ mod test {
             let mut memory = Memory::default();
             let root = memory.merkle_root().unwrap();
             assert_eq!(
-                crate::page::ZERO_HASHES[32 - 5],
+                page::ZERO_HASHES[32 - 5],
                 root,
                 "Fully zeroed memory should have expected zero hash"
             );
@@ -536,7 +535,7 @@ mod test {
             memory.set_memory(0xF000, 0).unwrap();
             let root = memory.merkle_root().unwrap();
             assert_eq!(
-                crate::page::ZERO_HASHES[32 - 5],
+                page::ZERO_HASHES[32 - 5],
                 root,
                 "Fully zeroed memory should have expected zero hash"
             );
@@ -548,7 +547,7 @@ mod test {
             memory.set_memory(0xF000, 1).unwrap();
             let root = memory.merkle_root().unwrap();
             assert_ne!(
-                crate::page::ZERO_HASHES[32 - 5],
+                page::ZERO_HASHES[32 - 5],
                 root,
                 "Non-zero memory should not have expected zero hash"
             );
@@ -561,7 +560,7 @@ mod test {
             memory.set_memory(0xF004, 0).unwrap();
             let root = memory.merkle_root().unwrap();
             assert_eq!(
-                crate::page::ZERO_HASHES[32 - 5],
+                page::ZERO_HASHES[32 - 5],
                 root,
                 "Still should have expected zero hash"
             );
@@ -615,19 +614,19 @@ mod test {
             let mut memory = Memory::default();
             memory.set_memory(0xF000, 0).unwrap();
             assert_eq!(
-                crate::page::ZERO_HASHES[32 - 5],
+                page::ZERO_HASHES[32 - 5],
                 memory.merkle_root().unwrap(),
                 "Zero at first"
             );
             memory.set_memory(0xF004, 1).unwrap();
             assert_ne!(
-                crate::page::ZERO_HASHES[32 - 5],
+                page::ZERO_HASHES[32 - 5],
                 memory.merkle_root().unwrap(),
                 "Non-zero"
             );
             memory.set_memory(0xF004, 0).unwrap();
             assert_eq!(
-                crate::page::ZERO_HASHES[32 - 5],
+                page::ZERO_HASHES[32 - 5],
                 memory.merkle_root().unwrap(),
                 "Zero again"
             );

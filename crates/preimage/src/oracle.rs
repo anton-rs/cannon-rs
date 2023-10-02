@@ -1,6 +1,6 @@
 //! This module contains the [Client] struct and its implementation.
 
-use crate::{Oracle, PreimageGetter, ReadWritePair};
+use crate::{Key, Oracle, PreimageGetter, ReadWritePair};
 use anyhow::Result;
 use std::io::{Read, Write};
 
@@ -18,7 +18,7 @@ impl OracleClient {
 }
 
 impl Oracle for OracleClient {
-    fn get(&mut self, key: impl crate::Key) -> Result<Vec<u8>> {
+    fn get(&mut self, key: impl Key) -> Result<Vec<u8>> {
         let hash = key.preimage_key();
         self.io.write_all(&hash)?;
 

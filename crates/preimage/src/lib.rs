@@ -9,7 +9,7 @@ mod traits;
 pub use traits::{FileChannel, Hint, Hinter, Key, Oracle};
 
 mod types;
-pub use types::{Keccak256Key, KeyType, LocalIndexKey, PreimageGetter};
+pub use types::{Keccak256Key, KeyType, LocalIndexKey, PreimageGetter, RawKey};
 
 mod hints;
 pub use hints::{HintReader, HintWriter};

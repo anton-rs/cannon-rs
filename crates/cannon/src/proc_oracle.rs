@@ -3,7 +3,7 @@
 use anyhow::Result;
 use cannon_mipsevm::PreimageOracle;
 use command_fds::{CommandFdExt, FdMapping};
-use preimage_oracle::{Hint, HintWriter, Hinter, Oracle, OracleClient, ReadWritePair};
+use preimage_oracle::{Hint, HintWriter, Hinter, Oracle, OracleClient, RawKey, ReadWritePair};
 use std::{
     io,
     os::fd::AsRawFd,
@@ -84,6 +84,7 @@ impl PreimageOracle for ProcessPreimageOracle {
     }
 
     fn get(&mut self, key: [u8; 32]) -> anyhow::Result<Vec<u8>> {
+        let key = RawKey(key);
         self.preimage_client.get(key)
     }
 }

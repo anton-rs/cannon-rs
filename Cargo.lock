@@ -431,12 +431,10 @@ dependencies = [
  "cannon-mipsevm",
  "command-fds",
  "flate2",
- "libc",
  "preimage-oracle",
  "proptest",
  "serde",
  "serde_json",
- "tokio",
  "tracing",
 ]
 

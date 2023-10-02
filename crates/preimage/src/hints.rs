@@ -17,7 +17,7 @@ impl HintWriter {
 }
 
 impl Hinter for HintWriter {
-    fn hint<T: Hint>(&mut self, value: T) -> Result<()> {
+    fn hint(&mut self, value: impl Hint) -> Result<()> {
         let hint = value.hint();
         let mut hint_bytes = vec![0u8; 4 + hint.len()];
         hint_bytes[0..4].copy_from_slice((hint.len() as u32).to_be_bytes().as_ref());
@@ -183,10 +183,11 @@ mod tests {
 
         let a = tokio::spawn({
             let writer = Arc::clone(&hint_writer);
+            let (one, two) = (b"one".to_vec(), b"two".to_vec());
             async move {
                 let mut writer_lock = writer.lock().await;
-                writer_lock.hint::<&[u8]>(b"one".to_vec().as_ref()).unwrap();
-                writer_lock.hint::<&[u8]>(b"two".to_vec().as_ref()).unwrap();
+                writer_lock.hint(&one).unwrap();
+                writer_lock.hint(&two).unwrap();
             }
         });
 
