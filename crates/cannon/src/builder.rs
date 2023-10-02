@@ -1,6 +1,6 @@
 //! The [KernelBuilder] struct is a helper for building a [Kernel] struct.
 
-use crate::{gz, Kernel, ProcessPreimageOracle};
+use crate::{gz, ChildWithFds, Kernel, ProcessPreimageOracle};
 use anyhow::{anyhow, Result};
 use cannon_mipsevm::{InstrumentedState, State};
 use std::{
@@ -63,12 +63,16 @@ impl KernelBuilder {
             &server_io,
         )?;
 
+        let server_proc = server_proc.map(|p| ChildWithFds {
+            inner: p,
+            fds: server_io,
+        });
+
         // TODO(clabby): Allow for the stdout / stderr to be configurable.
         let instrumented = InstrumentedState::new(state, oracle, io::stdout(), io::stderr());
 
         Ok(Kernel::new(
             instrumented,
-            server_io,
             server_proc,
             self.input,
             self.output,

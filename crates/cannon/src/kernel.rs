@@ -1,10 +1,9 @@
 //! This module contains the [Kernel] struct and its associated methods.
 
-use crate::{gz::compress_bytes, types::Proof};
+use crate::{gz::compress_bytes, types::Proof, ChildWithFds};
 use anyhow::{anyhow, Result};
 use cannon_mipsevm::{InstrumentedState, PreimageOracle, StateWitnessHasher};
-use preimage_oracle::ReadWritePair;
-use std::{fs, io::Write, process::Child};
+use std::{fs, io::Write};
 use tokio::{runtime::Runtime, task::JoinHandle};
 
 #[cfg(feature = "tracing")]
@@ -16,12 +15,11 @@ use std::time::Instant;
 pub struct Kernel<O: Write, E: Write, P: PreimageOracle> {
     /// The instrumented state that the kernel will run.
     ins_state: InstrumentedState<O, E, P>,
-    /// The Kernel and the preimage server's IO. We hold on to these so that they
-    /// are not dropped until the kernel is dropped, keeping the file descriptors
-    /// open.
-    server_io: [ReadWritePair; 2],
-    /// The server's process
-    server_proc: Option<Child>,
+    /// The server's process coupled with the preimage server's IO. We hold on to these so that they
+    /// are not dropped until the kernel is dropped, preventing a broken pipe before the kernel is
+    /// dropped. The other side of the bidirectional channel is owned by the [InstrumentedState],
+    /// which is also dropped when the kernel is dropped.
+    server_proc: Option<ChildWithFds>,
     /// The path to the input JSON state.
     input: String,
     /// The path to the output JSON state.
@@ -50,8 +48,7 @@ where
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
         ins_state: InstrumentedState<O, E, P>,
-        server_io: [ReadWritePair; 2],
-        server_proc: Option<Child>,
+        server_proc: Option<ChildWithFds>,
         input: String,
         output: Option<String>,
         proof_at: Option<String>,
@@ -63,7 +60,6 @@ where
     ) -> Self {
         Self {
             ins_state,
-            server_io,
             server_proc,
             input,
             output,
@@ -181,7 +177,7 @@ where
                 // TODO: This may be problematic.
                 if step % 10_000_000 == 0 {
                     if let Some(ref mut proc) = self.server_proc {
-                        match proc.try_wait() {
+                        match proc.inner.try_wait() {
                             Ok(Some(status)) => {
                                 anyhow::bail!("Preimage server exited with status: {}", status);
                             }

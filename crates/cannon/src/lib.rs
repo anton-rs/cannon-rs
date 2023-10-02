@@ -13,6 +13,6 @@ mod proc_oracle;
 pub use proc_oracle::ProcessPreimageOracle;
 
 mod types;
-pub use types::Proof;
+pub use types::{ChildWithFds, Proof};
 
 mod traces;
