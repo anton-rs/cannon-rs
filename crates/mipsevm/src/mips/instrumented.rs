@@ -63,6 +63,7 @@ where
     /// ### Returns
     /// - Ok(Some(witness)): The [StepWitness] for the current
     /// - Err(_): An error occurred while processing the instruction step in the MIPS emulator.
+    #[inline(always)]
     pub fn step(&mut self, proof: bool) -> Result<Option<StepWitness>> {
         self.mem_proof_enabled = proof;
         self.last_mem_access = !0u32 as Address;

@@ -1,6 +1,10 @@
 //! This module contains the traits for the preimage-oracle crate.
 
 use anyhow::Result;
+use std::{
+    fs::File,
+    io::{Read, Write},
+};
 
 /// The [Key] trait describes the behavior of a pre-image key that may be wrapped
 /// into a 32-byte type-prefixed key.
@@ -35,5 +39,18 @@ pub trait Hinter {
     ///
     /// ### Returns
     /// - A [Result] indicating whether or not the hint was successfully sent.
-    fn hint<T: Hint>(&self, hint: T) -> Result<()>;
+    fn hint(&mut self, hint: impl Hint) -> Result<()>;
+}
+
+/// The [FileChannel] trait represents a dual channel that can be used to read
+/// and write information to file descriptors.
+pub trait FileChannel: Read + Write {
+    /// Returns the reader file descriptor.
+    fn reader(&mut self) -> &mut File;
+
+    /// Returns the writer file descriptor.
+    fn writer(&mut self) -> &mut File;
+
+    /// Closes the file descriptors.
+    fn close(self) -> Result<()>;
 }

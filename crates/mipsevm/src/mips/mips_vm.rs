@@ -8,7 +8,7 @@ use crate::{
     Address, Fd, InstrumentedState, PreimageOracle,
 };
 use anyhow::Result;
-use std::io::{self, Cursor, Read, Write};
+use std::io::{self, BufReader, Read, Write};
 
 impl<O, E, P> InstrumentedState<O, E, P>
 where
@@ -25,6 +25,7 @@ where
     /// ### Returns
     /// - `Ok((data, data_len))`: The preimage data and length.
     /// - `Err(_)`: An error occurred while fetching the preimage.
+    #[inline(always)]
     pub(crate) fn read_preimage(
         &mut self,
         key: [u8; 32],
@@ -38,16 +39,14 @@ where
             // Resizes the `last_preimage` vec in-place to reduce reallocations.
             self.last_preimage.resize(8 + data.len(), 0);
             self.last_preimage[0..8].copy_from_slice(&data.len().to_be_bytes());
-            self.last_preimage[8..].copy_from_slice(data);
+            self.last_preimage[8..].copy_from_slice(&data);
         }
 
         self.last_preimage_offset = offset;
 
-        // TODO(clabby): This could be problematic if the `Cursor`'s read function returns
-        // 0 as EOF rather than the amount of bytes read into `data`.
         let mut data = [0u8; 32];
         let data_len =
-            Cursor::new(&self.last_preimage[offset as usize..]).read(data.as_mut_slice())?;
+            BufReader::new(&self.last_preimage[offset as usize..]).read(data.as_mut_slice())?;
         Ok((data, data_len))
     }
 
@@ -58,6 +57,7 @@ where
     ///
     /// ### Returns
     /// - A [Result] indicating if the operation was successful.
+    #[inline(always)]
     pub(crate) fn track_mem_access(&mut self, effective_address: Address) -> Result<()> {
         if self.mem_proof_enabled && self.last_mem_access != effective_address {
             if self.last_mem_access != Address::MAX {
@@ -74,6 +74,7 @@ where
     ///
     /// ### Returns
     /// - A [Result] indicating if the step was successful.
+    #[inline(always)]
     pub(crate) fn inner_step(&mut self) -> Result<()> {
         if self.state.exited {
             return Ok(());
@@ -197,6 +198,7 @@ where
     ///
     /// ### Returns
     /// - A [Result] indicating if the syscall dispatch was successful.
+    #[inline(always)]
     pub(crate) fn handle_syscall(&mut self) -> Result<()> {
         let mut v0 = 0;
         let mut v1 = 0;
@@ -306,7 +308,7 @@ where
                                 let hint = &self.state.last_hint[4..4 + hint_len as usize];
 
                                 // TODO(clabby): Ordering could be an issue here.
-                                self.preimage_oracle.hint(hint);
+                                self.preimage_oracle.hint(hint)?;
                                 self.state.last_hint =
                                     self.state.last_hint[4 + hint_len as usize..].into();
                             } else {
@@ -389,6 +391,7 @@ where
     ///
     /// ### Returns
     /// - A [Result] indicating if the branch dispatch was successful.
+    #[inline(always)]
     pub(crate) fn handle_branch(
         &mut self,
         opcode: u32,
@@ -450,6 +453,7 @@ where
     ///
     /// ### Returns
     /// - A [Result] indicating if the branch dispatch was successful.
+    #[inline(always)]
     pub(crate) fn handle_hi_lo(
         &mut self,
         fun: u32,
@@ -523,6 +527,7 @@ where
     ///
     /// ### Returns
     /// - A [Result] indicating if the branch dispatch was successful.
+    #[inline(always)]
     pub(crate) fn handle_jump(&mut self, link_reg: u32, dest: u32) -> Result<()> {
         if self.state.next_pc != self.state.pc + 4 {
             anyhow::bail!("Unexpected jump in delay slot at {:x}", self.state.pc);
@@ -546,6 +551,7 @@ where
     ///
     /// ### Returns
     /// - A [Result] indicating if the branch dispatch was successful.
+    #[inline(always)]
     pub(crate) fn handle_rd(&mut self, store_reg: u32, val: u32, conditional: bool) -> Result<()> {
         if store_reg >= 32 {
             anyhow::bail!("Invalid register index {}", store_reg);
@@ -571,6 +577,7 @@ where
     /// ### Returns
     /// - `Ok(n)` - The result of the instruction execution.
     /// - `Err(_)`: An error occurred while executing the instruction.
+    #[inline(always)]
     pub(crate) fn execute(&mut self, instruction: u32, rs: u32, rt: u32, mem: u32) -> Result<u32> {
         // Opcodes in MIPS are 6 bits in size, and stored in the high-order bits of the big-endian
         // instruction.
@@ -738,6 +745,7 @@ where
 ///
 /// ### Returns
 /// - The sign extended value.
+#[inline(always)]
 pub(crate) fn sign_extend(data: u32, index: u32) -> u32 {
     let is_signed = (data >> (index - 1)) != 0;
     let signed = ((1 << (32 - index)) - 1) << index;

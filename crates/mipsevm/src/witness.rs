@@ -6,7 +6,7 @@ use alloy_sol_types::{sol, SolCall};
 use preimage_oracle::KeyType;
 
 /// The size of an encoded [StateWitness] in bytes.
-pub(crate) const STATE_WITNESS_SIZE: usize = 226;
+pub const STATE_WITNESS_SIZE: usize = 226;
 
 impl StateWitnessHasher for StateWitness {
     fn state_hash(&self) -> [u8; 32] {

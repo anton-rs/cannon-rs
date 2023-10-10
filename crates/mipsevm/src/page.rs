@@ -34,7 +34,7 @@ pub(crate) static DEFAULT_CACHE: Lazy<[[u8; 32]; PAGE_SIZE_WORDS]> = Lazy::new(|
 });
 
 /// A [CachedPage] is a [Page] with an in-memory cache of intermediate nodes.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub struct CachedPage {
     pub data: Page,
     /// Storage for intermediate nodes

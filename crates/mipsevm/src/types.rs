@@ -1,7 +1,13 @@
 //! This module contains all of the type aliases and enums used within this crate.
 
+use crate::CachedPage;
+use std::{cell::RefCell, rc::Rc};
+
 /// A [Page] is a portion of memory of size `PAGE_SIZE`.
 pub type Page = [u8; crate::page::PAGE_SIZE];
+
+/// A [CachedPage] with shared ownership.
+pub type SharedCachedPage = Rc<RefCell<CachedPage>>;
 
 /// A [StateWitness] is an encoded commitment to the current [crate::State] of the MIPS emulator.
 pub type StateWitness = [u8; crate::witness::STATE_WITNESS_SIZE];

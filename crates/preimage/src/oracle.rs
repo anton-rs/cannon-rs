@@ -1,62 +1,65 @@
 //! This module contains the [Client] struct and its implementation.
 
-use crate::{Oracle, PreimageGetter};
+use crate::{Key, Oracle, PreimageGetter, ReadWritePair};
 use anyhow::Result;
-use std::sync::mpsc::{Receiver, Sender};
+use std::io::{Read, Write};
 
 /// The [OracleClient] is a client that can make requests and write to the [OracleServer].
-/// It contains the [Receiver] for data sent from the server as well as the [Sender] for
-/// data sent to the server.
+/// It contains a [ReadWritePair] that is one half of a bidirectional channel, with the other
+/// half being owned by the [OracleServer].
 pub struct OracleClient {
-    rx: Receiver<Vec<u8>>,
-    tx: Sender<Vec<u8>>,
+    io: ReadWritePair,
 }
 
 impl OracleClient {
-    fn new(rx: Receiver<Vec<u8>>, tx: Sender<Vec<u8>>) -> Self {
-        Self { rx, tx }
+    pub fn new(io: ReadWritePair) -> Self {
+        Self { io }
     }
 }
 
 impl Oracle for OracleClient {
-    fn get(&mut self, key: impl crate::Key) -> Result<Vec<u8>> {
+    fn get(&mut self, key: impl Key) -> Result<Vec<u8>> {
         let hash = key.preimage_key();
-        self.tx.send(hash.to_vec())?;
+        self.io.write_all(&hash)?;
 
-        let length = u64::from_be_bytes(self.rx.recv()?.as_slice().try_into()?);
+        let mut length = [0u8; 8];
+        self.io.read_exact(&mut length)?;
+        let length = u64::from_be_bytes(length) as usize;
 
         let payload = if length == 0 {
             Vec::default()
         } else {
-            self.rx.recv()?
+            let mut payload = vec![0u8; length];
+            self.io.read_exact(&mut payload)?;
+            payload
         };
         Ok(payload)
     }
 }
 
 /// The [OracleServer] is a server that can receive requests from the [OracleClient] and
-/// respond to them. It contains the [Receiver] for data sent from the client as well as
-/// the [Sender] for data sent to the client.
+/// respond to them. It contains a [ReadWritePair] that is one half of a bidirectional channel,
+/// with the other half being owned by the [OracleClient].
 pub struct OracleServer {
-    rx: Receiver<Vec<u8>>,
-    tx: Sender<Vec<u8>>,
+    io: ReadWritePair,
 }
 
 impl OracleServer {
-    fn new(rx: Receiver<Vec<u8>>, tx: Sender<Vec<u8>>) -> Self {
-        Self { rx, tx }
+    pub fn new(io: ReadWritePair) -> Self {
+        Self { io }
     }
 }
 
 impl OracleServer {
     pub fn new_preimage_request(&mut self, getter: PreimageGetter) -> Result<()> {
-        let key = self.rx.recv()?.as_slice().try_into()?;
+        let mut key = [0u8; 32];
+        self.io.read_exact(&mut key)?;
 
         let value = getter(key)?;
 
-        self.tx.send((value.len() as u64).to_be_bytes().to_vec())?;
+        self.io.write_all(&(value.len() as u64).to_be_bytes())?;
         if !value.is_empty() {
-            self.tx.send(value)?;
+            self.io.write_all(&value)?;
         }
 
         Ok(())
@@ -72,47 +75,50 @@ mod test {
     use tokio::sync::Mutex;
 
     async fn test_preimage(preimages: Vec<Vec<u8>>) {
-        let (bw, ar) = std::sync::mpsc::channel::<Vec<u8>>();
-        let (aw, br) = std::sync::mpsc::channel::<Vec<u8>>();
+        let (a, b) = crate::create_bidirectional_channel().unwrap();
 
-        let client = Arc::new(Mutex::new(OracleClient::new(ar, aw)));
-        let server = Arc::new(Mutex::new(OracleServer::new(br, bw)));
+        let client = Arc::new(Mutex::new(OracleClient::new(a)));
+        let server = Arc::new(Mutex::new(OracleServer::new(b)));
 
-        let mut preimage_by_hash: HashMap<[u8; 32], Vec<u8>> = Default::default();
-        for preimage in preimages.iter() {
-            let k = *keccak256(preimage) as Keccak256Key;
-            preimage_by_hash.insert(k.preimage_key(), preimage.clone());
-        }
-        let preimage_by_hash = Arc::new(preimage_by_hash);
+        let preimage_by_hash = {
+            let mut preimage_by_hash: HashMap<[u8; 32], Vec<u8>> = Default::default();
+            for preimage in preimages.iter() {
+                let k = *keccak256(preimage) as Keccak256Key;
+                preimage_by_hash.insert(k.preimage_key(), preimage.clone());
+            }
+            Arc::new(preimage_by_hash)
+        };
 
         for preimage in preimages.into_iter() {
             let k = *keccak256(preimage) as Keccak256Key;
 
-            let client = Arc::clone(&client);
-            let preimage_by_hash_a = Arc::clone(&preimage_by_hash);
-            let join_a = tokio::task::spawn(async move {
-                // Lock the client
-                let mut cl = client.lock().await;
-                let result = cl.get(k).unwrap();
+            let join_a = tokio::task::spawn({
+                let (client, preimage_by_hash) =
+                    (Arc::clone(&client), Arc::clone(&preimage_by_hash));
+                async move {
+                    // Lock the client
+                    let mut cl = client.lock().await;
+                    let result = cl.get(k).unwrap();
 
-                // Pull the expected value from the map
-                let expected = preimage_by_hash_a.get(&k.preimage_key()).unwrap();
-                assert_eq!(expected, &result);
+                    // Pull the expected value from the map
+                    let expected = preimage_by_hash.get(&k.preimage_key()).unwrap();
+                    assert_eq!(expected, &result);
+                }
             });
 
-            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-
-            let server = Arc::clone(&server);
-            let preimage_by_hash_b = Arc::clone(&preimage_by_hash);
-            let join_b = tokio::task::spawn(async move {
-                // Lock the server
-                let mut server = server.lock().await;
-                server
-                    .new_preimage_request(Box::new(move |key: [u8; 32]| {
-                        let dat = preimage_by_hash_b.get(&key).unwrap();
-                        Ok(dat.clone())
-                    }))
-                    .unwrap();
+            let join_b = tokio::task::spawn({
+                let (server, preimage_by_hash) =
+                    (Arc::clone(&server), Arc::clone(&preimage_by_hash));
+                async move {
+                    // Lock the server
+                    let mut server = server.lock().await;
+                    server
+                        .new_preimage_request(Box::new(move |key: [u8; 32]| {
+                            let dat = preimage_by_hash.get(&key).unwrap();
+                            Ok(dat.clone())
+                        }))
+                        .unwrap();
+                }
             });
 
             tokio::try_join!(join_a, join_b).unwrap();
