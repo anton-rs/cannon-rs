@@ -1,84 +1,78 @@
 name: Rust CI
 on: [push]
 
+env:
+  CARGO_TERM_COLOR: always
+
 jobs:
   cargo-tests:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v3
-      - name: Install Rust toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: nightly
-          profile: minimal
-          override: true
-      - uses: Swatinem/rust-cache@v1
+        uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
+      - name: Install xsltproc
+        run: sudo apt-get install xsltproc
+      - uses: taiki-e/install-action@nextest
       - name: cargo test
-        run: cargo test --all --all-features
+        run: cargo nextest run --workspace --all --all-features --locked
   cargo-lint:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v3
-      - name: Install Rust toolchain
-        uses: actions-rs/toolchain@v1
+        uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
         with:
-          toolchain: nightly
-          profile: minimal
           components: rustfmt, clippy
-          override: true
-      - uses: Swatinem/rust-cache@v1
+      - uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
+      - name: Install xsltproc
+        run: sudo apt-get install xsltproc
       - name: cargo fmt
         run: cargo +nightly fmt --all -- --check
       - name: cargo clippy
-        run: cargo +nightly clippy --all --all-features -- -D warnings
+        run: cargo +nightly clippy --workspace --all --all-features --locked -- -D warnings
   cargo-build:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     continue-on-error: true
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v3
-      - name: Install Rust toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: nightly
-          profile: minimal
-          override: true
-      - uses: Swatinem/rust-cache@v1
+        uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
+      - name: Install xsltproc
+        run: sudo apt-get install xsltproc
       - name: build
         id: build
-        continue-on-error: true
-        run: cargo build --all
+        run: cargo build --workspace --all --locked 
   cargo-doc:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     continue-on-error: true
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v3
-      - name: Install Rust toolchain
-        uses: actions-rs/toolchain@v1
+        uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
         with:
-          toolchain: nightly
-          profile: minimal
-          override: true
-      - uses: Swatinem/rust-cache@v1
+          target: ${{ env.TARGET }}
+      - uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
+      - name: Install xsltproc
+        run: sudo apt-get install xsltproc
       - name: doclint
         id: build
         continue-on-error: true
         run: RUSTDOCFLAGS="-D warnings" cargo doc --all --no-deps --all-features --document-private-items
       - name: doctest
-        run: cargo test --doc --all --all-features
+        run: cargo test --doc --all --all-features --locked
 
