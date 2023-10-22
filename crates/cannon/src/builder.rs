@@ -62,7 +62,7 @@ impl KernelBuilder {
             .collect::<Vec<_>>();
         let (oracle, server_proc) = ProcessPreimageOracle::start(
             PathBuf::from(
-                cmd.get(0)
+                cmd.first()
                     .ok_or(anyhow!("Missing preimage server binary path"))?,
             ),
             &cmd[1..],
