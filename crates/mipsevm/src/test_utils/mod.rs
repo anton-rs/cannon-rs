@@ -1,7 +1,7 @@
 //! Testing utilities.
 
-use crate::{utils::concat_fixed, PreimageOracle};
-use alloy_primitives::{hex, keccak256};
+use crate::{utils::concat_fixed, utils::keccak256, PreimageOracle};
+use alloy_primitives::hex;
 use anyhow::Result;
 use preimage_oracle::{Hint, Keccak256Key, Key, LocalIndexKey};
 use rustc_hash::FxHashMap;

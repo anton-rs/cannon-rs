@@ -1,7 +1,7 @@
 //! This module contains the various witness types.
 
-use crate::{State, StateWitness, StateWitnessHasher};
-use alloy_primitives::{keccak256, Bytes, B256, U256};
+use crate::{utils::keccak256, State, StateWitness, StateWitnessHasher};
+use alloy_primitives::{Bytes, B256, U256};
 use alloy_sol_types::{sol, SolCall};
 use preimage_oracle::KeyType;
 

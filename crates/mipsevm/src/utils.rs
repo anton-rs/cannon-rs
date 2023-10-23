@@ -1,6 +1,6 @@
 //! This module contains utility and helper functions for this crate.
 
-use alloy_primitives::{keccak256, B256};
+use alloy_primitives::B256;
 
 /// Concatenate two fixed sized arrays together into a new array with minimal reallocation.
 #[inline(always)]
@@ -17,10 +17,16 @@ where
 
 /// Hash the concatenation of two fixed sized arrays.
 #[inline(always)]
-pub(crate) fn keccak_concat_fixed<T, const N: usize, const M: usize>(a: [T; N], b: [T; M]) -> B256
+pub(crate) fn keccak_concat_fixed<const N: usize, const M: usize>(a: [u8; N], b: [u8; M]) -> B256
 where
-    T: Copy + Default,
-    [T; N + M]: AsRef<[u8]>,
+    [(); N + M]:,
 {
-    keccak256(concat_fixed(a, b))
+    keccak256(concat_fixed(a, b).as_slice())
+}
+
+#[inline(always)]
+pub(crate) fn keccak256<T: AsRef<[u8]>>(input: T) -> B256 {
+    let mut out = B256::ZERO;
+    xkcp_rs::keccak256(input.as_ref(), out.as_mut());
+    out
 }

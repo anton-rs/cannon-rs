@@ -1,7 +1,6 @@
 //! This module contains the data structure for a [Page] within the MIPS emulator's [Memory].
 
-use crate::{utils::keccak_concat_fixed, Address, Gindex, Page};
-use alloy_primitives::keccak256;
+use crate::{utils::keccak256, utils::keccak_concat_fixed, Address, Gindex, Page};
 use anyhow::Result;
 use once_cell::sync::Lazy;
 
