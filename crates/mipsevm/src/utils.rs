@@ -21,6 +21,14 @@ pub(crate) fn keccak_concat_fixed<const N: usize, const M: usize>(a: [u8; N], b:
 where
     [(); N + M]:,
 {
+    #[cfg(feature = "simd-keccak")]
+    {
+        let mut out = B256::ZERO;
+        keccak256_aarch64_simd::simd_keccak256_single::<64>(&concat_fixed(a, b), out.as_mut());
+        out
+    }
+
+    #[cfg(not(feature = "simd-keccak"))]
     keccak256(concat_fixed(a, b).as_slice())
 }
 

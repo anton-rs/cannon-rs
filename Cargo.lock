@@ -471,6 +471,7 @@ dependencies = [
  "anyhow",
  "criterion",
  "elf",
+ "keccak256-aarch64-simd",
  "once_cell",
  "pprof",
  "preimage-oracle",
@@ -1206,6 +1207,11 @@ checksum = "8f6d5ed8676d904364de097082f4e7d240b571b67989ced0240f08b7f966f940"
 dependencies = [
  "cpufeatures",
 ]
+
+[[package]]
+name = "keccak256-aarch64-simd"
+version = "0.1.0"
+source = "git+https://github.com/clabby/keccak256-aarch64#5c2a455447bf8836b4038aa0a84aeb6a313361eb"
 
 [[package]]
 name = "lazy_static"

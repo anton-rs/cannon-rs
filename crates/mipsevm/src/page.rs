@@ -1,8 +1,11 @@
 //! This module contains the data structure for a [Page] within the MIPS emulator's [Memory].
 
-use crate::{utils::keccak256, utils::keccak_concat_fixed, Address, Gindex, Page};
+use crate::{utils::keccak_concat_fixed, Address, Gindex, Page};
 use anyhow::Result;
 use once_cell::sync::Lazy;
+
+#[cfg(not(feature = "simd-keccak"))]
+use crate::utils::keccak256;
 
 pub(crate) const PAGE_ADDRESS_SIZE: usize = 12;
 pub(crate) const PAGE_KEY_SIZE: usize = 32 - PAGE_ADDRESS_SIZE;
@@ -117,6 +120,17 @@ impl CachedPage {
         let hash = if g_index >= PAGE_SIZE_WORDS >> 1 {
             // This is a leaf node.
             let data_idx = (g_index - (PAGE_SIZE_WORDS >> 1)) << 6;
+            #[cfg(feature = "simd-keccak")]
+            {
+                let mut out = [0u8; 32];
+                keccak256_aarch64_simd::simd_keccak256_single::<64>(
+                    &self.data[data_idx..data_idx + 64],
+                    &mut out,
+                );
+                out
+            }
+
+            #[cfg(not(feature = "simd-keccak"))]
             *keccak256(&self.data[data_idx..data_idx + 64])
         } else {
             // This is an internal node.
