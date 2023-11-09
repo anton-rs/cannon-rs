@@ -1210,8 +1210,8 @@ dependencies = [
 
 [[package]]
 name = "keccak256-aarch64-simd"
-version = "0.1.0"
-source = "git+https://github.com/clabby/keccak256-aarch64#5c2a455447bf8836b4038aa0a84aeb6a313361eb"
+version = "0.0.1"
+source = "git+https://github.com/clabby/keccak256-aarch64?rev=5c4c8f8#5c4c8f864389aa17b97f21400fe9a908d9262147"
 
 [[package]]
 name = "lazy_static"

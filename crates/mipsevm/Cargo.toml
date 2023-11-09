@@ -17,7 +17,7 @@ rustc-hash = "1.1.0"
 serde = { version = "1.0.188", features = ["derive"] }
 serde_json = "1.0.107"
 xkcp-rs = { git = "https://github.com/DaniPopes/xkcp-rs", rev = "40447a5" }
-keccak256-aarch64-simd = { git = "https://github.com/clabby/keccak256-aarch64", optional = true }
+keccak256-aarch64-simd = { git = "https://github.com/clabby/keccak256-aarch64", rev = "5c4c8f8", optional = true }
 
 # misc
 anyhow = "1.0.75"
