@@ -7,13 +7,14 @@ version.workspace = true
 authors.workspace = true
 
 [dependencies]
-alloy-primitives = "0.4.0"
-tokio = { version = "1.32.0", features = ["full"] }
-os_pipe = "1.1.4"
+# workspace
+alloy-primitives.workspace = true
+anyhow.workspace = true
+tokio.workspace = true
 
 # misc
-anyhow = "1.0.75"
-tracing = { version = "0.1.37", optional = true }
+os_pipe = "1.1.4"
+tracing = { version = "0.1.40", optional = true }
 
 [dev-dependencies]
 rand = "0.8.5"

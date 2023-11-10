@@ -7,21 +7,28 @@ version.workspace = true
 authors.workspace = true
 
 [dependencies]
+# workspace
+alloy-primitives.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+anyhow.workspace = true
+
+# local
 preimage-oracle = { path = "../preimage" }
-alloy-primitives = "0.3.3"
-alloy-sol-types = "0.3.2"
-once_cell = "1.18.0"
-elf = "0.7.2"
-revm = { version = "3.3.0", features = ["no_gas_measuring"] }
-rustc-hash = "1.1.0"
-serde = { version = "1.0.188", features = ["derive"] }
-serde_json = "1.0.107"
-xkcp-rs = { git = "https://github.com/DaniPopes/xkcp-rs", rev = "40447a5" }
-keccak256-aarch64-simd = { git = "https://github.com/clabby/keccak256-aarch64", rev = "5c4c8f8", optional = true }
+
+# types
+alloy-sol-types = "0.4.2"
 
 # misc
-anyhow = "1.0.75"
-tracing = { version = "0.1.37", optional = true }
+once_cell = "1.18.0"
+elf = "0.7.3"
+revm = { version = "3.5.0", features = ["no_gas_measuring"] }
+tracing = { version = "0.1.40", optional = true }
+
+# hashing
+rustc-hash = "1.1.0"
+xkcp-rs = { git = "https://github.com/DaniPopes/xkcp-rs", rev = "40447a5" }
+keccak256-aarch64-simd = { git = "https://github.com/clabby/keccak256-aarch64", rev = "5c4c8f8", optional = true }
 
 [dev-dependencies]
 rand = "0.8.5"
