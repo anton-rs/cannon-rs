@@ -15,12 +15,9 @@ where
     concatenated
 }
 
-/// Hash the concatenation of two fixed sized arrays.
+/// Hash the concatenation of two 32 byte digests.
 #[inline(always)]
-pub(crate) fn keccak_concat_fixed<const N: usize, const M: usize>(a: [u8; N], b: [u8; M]) -> B256
-where
-    [(); N + M]:,
-{
+pub(crate) fn keccak_concat_hashes(a: [u8; 32], b: [u8; 32]) -> B256 {
     #[cfg(feature = "simd-keccak")]
     {
         let mut out = B256::ZERO;

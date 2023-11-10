@@ -3,7 +3,7 @@
 use crate::{
     page::{self},
     types::SharedCachedPage,
-    utils::keccak_concat_fixed,
+    utils::keccak_concat_hashes,
     Address, Gindex, Page, PageIndex,
 };
 use anyhow::Result;
@@ -148,7 +148,7 @@ impl Memory {
 
         let left = self.merkleize_subtree(g_index << 1)?;
         let right = self.merkleize_subtree((g_index << 1) | 1)?;
-        let result = *keccak_concat_fixed(left, right);
+        let result = *keccak_concat_hashes(left, right);
 
         self.nodes.insert(g_index, Some(result));
 
@@ -507,9 +507,9 @@ mod test {
             (32..proof.len()).step_by(32).for_each(|i| {
                 let sib: [u8; 32] = proof[i..i + 32].try_into().unwrap();
                 if path & 1 != 0 {
-                    node = *keccak_concat_fixed(sib, node);
+                    node = *keccak_concat_hashes(sib, node);
                 } else {
-                    node = *keccak_concat_fixed(node, sib);
+                    node = *keccak_concat_hashes(node, sib);
                 }
                 path >>= 1;
             });
@@ -590,15 +590,15 @@ mod test {
                 .merkleize_subtree((1 << page::PAGE_KEY_SIZE) | 6)
                 .unwrap();
             let z = page::ZERO_HASHES[page::PAGE_ADDRESS_SIZE - 5];
-            let r1 = keccak_concat_fixed(
-                keccak_concat_fixed(
-                    keccak_concat_fixed(z.into(), z.into()).into(),
-                    keccak_concat_fixed(z.into(), p3.into()).into(),
+            let r1 = keccak_concat_hashes(
+                keccak_concat_hashes(
+                    keccak_concat_hashes(z.into(), z.into()).into(),
+                    keccak_concat_hashes(z.into(), p3.into()).into(),
                 )
                 .into(),
-                keccak_concat_fixed(
-                    keccak_concat_fixed(z.into(), p5.into()).into(),
-                    keccak_concat_fixed(p6.into(), z.into()).into(),
+                keccak_concat_hashes(
+                    keccak_concat_hashes(z.into(), p5.into()).into(),
+                    keccak_concat_hashes(p6.into(), z.into()).into(),
                 )
                 .into(),
             );

@@ -1,6 +1,6 @@
 //! This module contains the data structure for a [Page] within the MIPS emulator's [Memory].
 
-use crate::{utils::keccak_concat_fixed, Address, Gindex, Page};
+use crate::{utils::keccak_concat_hashes, Address, Gindex, Page};
 use anyhow::Result;
 use once_cell::sync::Lazy;
 
@@ -19,7 +19,7 @@ pub(crate) const PAGE_KEY_MASK: usize = MAX_PAGE_COUNT - 1;
 pub(crate) static ZERO_HASHES: Lazy<[[u8; 32]; 256]> = Lazy::new(|| {
     let mut out = [[0u8; 32]; 256];
     for i in 1..256 {
-        out[i] = *keccak_concat_fixed(out[i - 1], out[i - 1])
+        out[i] = *keccak_concat_hashes(out[i - 1], out[i - 1])
     }
     out
 });
@@ -138,7 +138,7 @@ impl CachedPage {
             let right_child = left_child + 1;
 
             // Ensure children are hashed.
-            *keccak_concat_fixed(
+            *keccak_concat_hashes(
                 self.merkleize_subtree(left_child as Gindex)?,
                 self.merkleize_subtree(right_child as Gindex)?,
             )
@@ -166,12 +166,12 @@ mod test {
         assert_eq!(node, expected_leaf, "Leaf nodes should not be hashed");
 
         let node = page.merkleize_subtree(g_index >> 1).unwrap();
-        let expected_parent = keccak_concat_fixed(ZERO_HASHES[0].into(), expected_leaf.into());
+        let expected_parent = keccak_concat_hashes(ZERO_HASHES[0].into(), expected_leaf.into());
         assert_eq!(node, expected_parent, "Parent should be correct");
 
         let node = page.merkleize_subtree(g_index >> 2).unwrap();
         let expected_grandparent =
-            keccak_concat_fixed(expected_parent.into(), ZERO_HASHES[1].into());
+            keccak_concat_hashes(expected_parent.into(), ZERO_HASHES[1].into());
         assert_eq!(node, expected_grandparent, "Grandparent should be correct");
 
         let pre = page.merkle_root().unwrap();
