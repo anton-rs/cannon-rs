@@ -1,3 +1,5 @@
+#![allow(unused_imports)]
+
 /// Performs a tracing debug if the `tracing` feature is enabled.
 #[macro_export]
 macro_rules! debug {

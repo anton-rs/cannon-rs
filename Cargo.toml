@@ -12,7 +12,6 @@ lto = true
 codegen-units = 1
 
 [profile.dev]
-opt-level = 1
 overflow-checks = false
 
 [profile.bench]

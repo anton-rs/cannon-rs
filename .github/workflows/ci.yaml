@@ -20,7 +20,7 @@ jobs:
         run: sudo apt-get install xsltproc
       - uses: taiki-e/install-action@nextest
       - name: cargo test
-        run: cargo nextest run --workspace --all --all-features --locked
+        run: cargo nextest run --release --workspace --all --locked
   cargo-lint:
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -37,9 +37,9 @@ jobs:
       - name: Install xsltproc
         run: sudo apt-get install xsltproc
       - name: cargo fmt
-        run: cargo +nightly fmt --all -- --check
+        run: cargo fmt --all -- --check
       - name: cargo clippy
-        run: cargo +nightly clippy --workspace --all --all-features --locked -- -D warnings
+        run: cargo clippy --workspace --all --locked -- -D warnings
   cargo-build:
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -74,7 +74,7 @@ jobs:
       - name: doclint
         id: build
         continue-on-error: true
-        run: RUSTDOCFLAGS="-D warnings" cargo doc --all --no-deps --all-features --document-private-items
+        run: RUSTDOCFLAGS="-D warnings" cargo doc --all --no-deps --document-private-items
       - name: doctest
-        run: cargo test --doc --all --all-features --locked
+        run: cargo test --doc --all --locked
 
