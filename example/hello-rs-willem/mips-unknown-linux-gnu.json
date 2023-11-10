@@ -1,0 +1,29 @@
+{
+  "arch": "mips",
+  "cpu": "mips32",
+  "crt-objects-fallback": "false",
+  "crt-static-respected": true,
+  "data-layout": "E-m:m-p:32:32-i8:8:32-i16:16:32-i64:64-n32-S64",
+  "dynamic-linking": true,
+  "env": "gnu",
+  "features": "-mips32r2,-fpxx,-nooddspreg,+mips32,+crt-static,+soft-float",
+  "has-rpath": true,
+  "has-thread-local": true,
+  "linker-flavor": "gnu-cc",
+  "llvm-target": "mips-unknown-linux-gnu",
+  "max-atomic-width": 32,
+  "os": "linux",
+  "position-independent-executables": true,
+  "relro-level": "full",
+  "supported-split-debuginfo": [
+    "packed",
+    "unpacked",
+    "off"
+  ],
+  "target-endian": "big",
+  "target-family": [
+    "unix"
+  ],
+  "target-mcount": "_mcount",
+  "target-pointer-width": "32"
+}
