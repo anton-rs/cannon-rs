@@ -80,9 +80,9 @@ To get started, a few dependencies are required:
 
 ```sh
 # With `cargo-nextest`
-cargo nextest run --all --all-features
+cargo +nightly nextest run --release --all --all-features
 # Without `cargo-nextest`
-cargo t --all --all-features
+cargo +nightly t --release --all --all-features
 ```
 
 ### Linting and Formatting
@@ -94,7 +94,7 @@ cargo +nightly fmt --all -- && cargo +nightly clippy --all --all-features -- -D 
 ### Running Benchmarks
 
 ```sh
-cargo bench --all --all-features
+cargo +nightly bench --all --all-features
 ```
 
 ## Documentation

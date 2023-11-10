@@ -60,10 +60,18 @@ Supported 55 instructions:
 | `Logical`            | `xori`        | Bitwise XOR immediate.                       |
 
 To run:
-1. Load a program into a state, e.g. using `LoadELF`.
-2. Patch the program if necessary: e.g. using `PatchGo` for Go programs, `PatchStack` for empty initial stack, etc.
+1. Load a program into a state, e.g. using `patch::load_elf`.
+2. Patch the program if necessary: e.g. using `patch::patch_go` for Go programs, `patch::patch_stack` for empty initial stack, etc.
 4. Implement the `PreimageOracle` interface
-5. Instrument the emulator with the state, and pre-image oracle, using `NewInstrumentedState`
-6. Step through the instrumented state with `Step(proof)`,
+5. Instrument the emulator with the state, and pre-image oracle, using `InstrumentedState::new`
+6. Step through the instrumented state with `step(proof)`,
    where `proof==true` if witness data should be generated. Steps are faster with `proof==false`.
 7. Optionally repeat the step on-chain by calling `MIPS.sol` and `PreimageOracle.sol`, using the above witness data.
+
+## Features
+- `tracing`: Enables tracing within the VM. This is useful for debugging, but does not need to be enabled in production
+   environments for performance reasons, unless a store of logs is required.
+- `simd-keccak`: Exclusive to ARMv8-A processors. Uses the [`keccak256-aarch64-simd`](https://github.com/clabby/keccak256-aarch64/tree/master) crate
+  for performance-critical `keccak256` hashing, which provides a very significant speedup to merkleization. **Warning**:
+  This crate is *highly* experimental, and it is not suggested that this feature is enabled in production, unless you
+  understand the risks associated with enabling it.
