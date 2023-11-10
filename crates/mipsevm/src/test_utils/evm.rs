@@ -7,8 +7,7 @@ use anyhow::Result;
 use revm::{
     db::{CacheDB, EmptyDB},
     primitives::{
-        AccountInfo, Bytecode, Bytes, CreateScheme, Output, ResultAndState, TransactTo, TxEnv,
-        B160, B256,
+        AccountInfo, Bytecode, Bytes, CreateScheme, Output, ResultAndState, TransactTo, TxEnv, B256,
     },
     Database, EVM,
 };
@@ -55,18 +54,18 @@ impl MipsEVM<CacheDB<EmptyDB>> {
 
         // Fund the zero address.
         db.insert_account_info(
-            B160::zero(),
+            Address::ZERO,
             AccountInfo {
                 balance: U256::from(u128::MAX),
                 nonce: 0,
-                code_hash: B256::zero(),
+                code_hash: B256::ZERO,
                 code: None,
             },
         );
 
         // Deploy the PreimageOracle contract.
         self.deploy_contract(
-            B160::from_slice(PREIMAGE_ORACLE_ADDR.as_slice()),
+            Address::from_slice(PREIMAGE_ORACLE_ADDR.as_slice()),
             Bytes::from(hex::decode(PREIMAGE_ORACLE_DEPLOYED_CODE)?),
         )?;
 
@@ -96,7 +95,7 @@ impl MipsEVM<CacheDB<EmptyDB>> {
         }) = self.inner.transact_ref()
         {
             // Deploy the MIPS contract manually.
-            self.deploy_contract(B160::from_slice(MIPS_ADDR.as_slice()), code)
+            self.deploy_contract(Address::from_slice(MIPS_ADDR.as_slice()), code)
         } else {
             anyhow::bail!("Failed to deploy MIPS contract");
         }
@@ -128,7 +127,7 @@ impl MipsEVM<CacheDB<EmptyDB>> {
                     ))?;
             self.fill_tx_env(
                 TransactTo::Call(PREIMAGE_ORACLE_ADDR.into()),
-                preimage_oracle_input.0,
+                preimage_oracle_input,
             );
             self.inner.transact_commit().map_err(|_| {
                 anyhow::anyhow!("Failed to commit preimage to PreimageOracle contract")
@@ -138,7 +137,7 @@ impl MipsEVM<CacheDB<EmptyDB>> {
         crate::debug!(target: "mipsevm::evm", "Performing EVM step");
 
         let step_input = witness.encode_step_input();
-        self.fill_tx_env(TransactTo::Call(MIPS_ADDR.into()), step_input.0);
+        self.fill_tx_env(TransactTo::Call(MIPS_ADDR.into()), step_input);
         if let Ok(ResultAndState {
             result:
                 revm::primitives::ExecutionResult::Success {
@@ -181,11 +180,11 @@ impl MipsEVM<CacheDB<EmptyDB>> {
     /// - `db`: The database backend of the MIPS EVM.
     /// - `addr`: The address to deploy the contract to.
     /// - `code`: The code of the contract to deploy.
-    pub(crate) fn deploy_contract(&mut self, addr: B160, code: Bytes) -> Result<()> {
+    pub(crate) fn deploy_contract(&mut self, addr: Address, code: Bytes) -> Result<()> {
         let mut acc_info = AccountInfo {
             balance: U256::ZERO,
             nonce: 0,
-            code_hash: B256::zero(),
+            code_hash: B256::ZERO,
             code: Some(Bytecode::new_raw(code)),
         };
         let db = self.inner.db().ok_or(anyhow::anyhow!("Missing database"))?;
@@ -202,8 +201,8 @@ impl MipsEVM<CacheDB<EmptyDB>> {
     /// - `to`: The address of the contract to call.
     pub(crate) fn fill_tx_env(&mut self, transact_to: TransactTo, data: Bytes) {
         self.inner.env.tx = TxEnv {
-            caller: 0.into(),
-            gas_limit: 0,
+            caller: Address::ZERO,
+            gas_limit: u64::MAX,
             gas_price: U256::ZERO,
             gas_priority_fee: None,
             transact_to,
@@ -212,6 +211,8 @@ impl MipsEVM<CacheDB<EmptyDB>> {
             chain_id: None,
             nonce: None,
             access_list: Vec::default(),
+            blob_hashes: Vec::default(),
+            max_fee_per_blob_gas: None,
         };
     }
 }

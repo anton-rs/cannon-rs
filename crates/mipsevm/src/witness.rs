@@ -94,12 +94,12 @@ impl StepWitness {
 
                 let call = loadLocalDataCall {
                     _0: B256::from(preimage_key).into(),
-                    _1: tmp,
+                    _1: B256::from(tmp),
                     _2: U256::from(preimage_value.len() - 8),
                     _3: U256::from(self.preimage_offset?),
                 };
 
-                Some(call.encode().into())
+                Some(call.abi_encode().into())
             }
             KeyType::GlobalKeccak => {
                 let call = loadKeccak256PreimagePartCall {
@@ -107,7 +107,7 @@ impl StepWitness {
                     _1: self.preimage_value.clone()?[8..].to_vec(),
                 };
 
-                Some(call.encode().into())
+                Some(call.abi_encode().into())
             }
         }
     }
@@ -122,6 +122,6 @@ impl StepWitness {
             _1: self.mem_proof.to_vec(),
         };
 
-        call.encode().into()
+        call.abi_encode().into()
     }
 }
