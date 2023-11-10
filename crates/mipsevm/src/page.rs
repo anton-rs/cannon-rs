@@ -123,7 +123,7 @@ impl CachedPage {
             #[cfg(feature = "simd-keccak")]
             {
                 let mut out = [0u8; 32];
-                keccak256_aarch64_simd::simd_keccak256_single::<64>(
+                keccak256_aarch64_simd::simd_keccak256_64b_single(
                     &self.data[data_idx..data_idx + 64],
                     &mut out,
                 );

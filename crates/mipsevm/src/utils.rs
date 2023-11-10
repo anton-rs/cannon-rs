@@ -24,7 +24,7 @@ where
     #[cfg(feature = "simd-keccak")]
     {
         let mut out = B256::ZERO;
-        keccak256_aarch64_simd::simd_keccak256_single::<64>(&concat_fixed(a, b), out.as_mut());
+        keccak256_aarch64_simd::simd_keccak256_64b_single(&concat_fixed(a, b), out.as_mut());
         out
     }
 
