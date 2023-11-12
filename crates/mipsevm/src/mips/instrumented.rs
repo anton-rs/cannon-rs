@@ -228,6 +228,38 @@ mod test {
     }
 
     #[test]
+    fn test_hello_rs_willem() {
+        let elf_bytes = include_bytes!("../../../../example/bin/hello-willem-rs.elf");
+        let mut state = load_elf(elf_bytes).unwrap();
+        patch::patch_go(elf_bytes, &mut state).unwrap();
+        patch::patch_stack(&mut state).unwrap();
+
+        let out = BufWriter::new(Vec::default());
+        let err = BufWriter::new(Vec::default());
+        let mut ins =
+            InstrumentedState::new(state, StaticOracle::new(b"hello world".to_vec()), out, err);
+
+        for _ in 0..400_000 {
+            if ins.state.exited {
+                break;
+            }
+            ins.step(false).unwrap();
+        }
+
+        assert!(ins.state.exited, "must exit");
+        assert_eq!(ins.state.exit_code, 0, "must exit with 0");
+
+        assert_eq!(
+            String::from_utf8(ins.std_out.buffer().to_vec()).unwrap(),
+            "hello world!\n"
+        );
+        assert_eq!(
+            String::from_utf8(ins.std_err.buffer().to_vec()).unwrap(),
+            ""
+        );
+    }
+
+    #[test]
     fn test_hello() {
         let elf_bytes = include_bytes!("../../../../example/bin/hello.elf");
         let mut state = load_elf(elf_bytes).unwrap();

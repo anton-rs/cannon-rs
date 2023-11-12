@@ -1,0 +1,12 @@
+[package]
+name = "hello-rs-willem"
+edition = "2021"
+version = "0.0.1"
+authors = ["Willem Olding"]
+
+[dependencies]
+cannon-io = { git = "https://github.com/badboilabs/Cannon-rs" }
+cannon-heap = { git = "https://github.com/badboilabs/Cannon-rs" }
+
+[profile.release]
+panic = "abort"
