@@ -1,0 +1,10 @@
+[package]
+name = "hello-rs"
+edition = "2021"
+version = "0.0.1"
+
+[dependencies]
+# no dependencies
+
+[profile.release]
+panic = "abort"

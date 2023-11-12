@@ -6,12 +6,12 @@ elf: $(patsubst %/go.mod,bin/%.elf,$(wildcard */go.mod))
 .PHONY: dump
 dump: $(patsubst %/go.mod,bin/%.dump,$(wildcard */go.mod))
 
-# .PHONY: ex-rs
-# ex-rs:
-# 	cd hello-rs && \
-# 		RUSTFLAGS='-C link-arg=-no-pie -C target-cpu=mips32 -C target-feature=-mips32r2,-fpxx,-nooddspreg,+mips32,+crt-static,+soft-float' \
-# 			cross build --release --target ../mips-unknown-linux-gnu.json -Z build-std -Z build-std-features=panic-unwind && \
-# 		cp ../../target/mips-unknown-linux-gnu/release/hello-rs ../bin/hello-rs.elf
+.PHONY: ex-rs
+ex-rs:
+	cd hello-rs && \
+		RUSTFLAGS='-C link-arg=-no-pie -C target-cpu=mips32 -C target-feature=-mips32r2,-fpxx,-nooddspreg,+mips32,+crt-static,+soft-float' \
+			cross build --release --target ./mips-unknown-linux-gnu.json -Z build-std -Z build-std-features=panic-unwind && \
+		cp ../../target/mips-unknown-linux-gnu/release/hello-rs ../bin/hello-rs.elf
 
 bin:
 	mkdir bin
