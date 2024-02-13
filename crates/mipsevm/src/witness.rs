@@ -1,9 +1,10 @@
 //! This module contains the various witness types.
 
 use crate::{utils::keccak256, State, StateWitness, StateWitnessHasher};
-use alloy_primitives::{Bytes, B256, U256};
+use alloy_primitives::{B256, U256};
 use alloy_sol_types::{sol, SolCall};
 use preimage_oracle::KeyType;
+use revm::primitives::Bytes;
 
 /// The size of an encoded [StateWitness] in bytes.
 pub const STATE_WITNESS_SIZE: usize = 226;
