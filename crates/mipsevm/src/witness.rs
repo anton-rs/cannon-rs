@@ -71,10 +71,7 @@ impl StepWitness {
     /// - `Some(input)` if the [StepWitness] has a preimage request.
     /// - `None` if the [StepWitness] does not have a preimage request.
     pub fn encode_preimage_oracle_input(&self) -> Option<Bytes> {
-        let Some(preimage_key) = self.preimage_key else {
-            crate::error!(target: "mipsevm::step_witness", "Cannot encode preimage oracle input without preimage key");
-            return None;
-        };
+        let preimage_key = self.preimage_key?;
 
         match KeyType::from(preimage_key[0]) {
             KeyType::_Illegal => {
