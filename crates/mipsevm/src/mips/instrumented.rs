@@ -16,10 +16,10 @@ pub struct InstrumentedState<O: Write, E: Write, P: PreimageOracle> {
     pub state: State,
     /// The MIPS thread context's stdout buffer.
     /// TODO(clabby): Prob not the best place for this.
-    pub(crate) std_out: BufWriter<O>,
+    pub std_out: BufWriter<O>,
     /// The MIPS thread context's stderr buffer.
     /// TODO(clabby): Prob not the best place for this.
-    pub(crate) std_err: BufWriter<E>,
+    pub std_err: BufWriter<E>,
     /// The last address we accessed in memory.
     pub(crate) last_mem_access: Address,
     /// Whether or not the memory proof generation is enabled.
