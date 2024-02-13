@@ -98,6 +98,16 @@ where
 
         Ok(witness)
     }
+
+    /// Returns the stdout buffer.
+    pub fn std_out(&self) -> &[u8] {
+        self.std_out.buffer()
+    }
+
+    /// Returns the stderr buffer.
+    pub fn std_err(&self) -> &[u8] {
+        self.std_err.buffer()
+    }
 }
 
 #[cfg(test)]

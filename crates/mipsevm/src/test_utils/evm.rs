@@ -2,12 +2,12 @@
 //! that has the MIPS & PreimageOracle smart contracts deployed at deterministic addresses.
 
 use crate::{StateWitness, StateWitnessHasher, StepWitness};
-use alloy_primitives::{hex, Address, U256};
 use anyhow::Result;
 use revm::{
     db::{CacheDB, EmptyDB},
     primitives::{
-        AccountInfo, Bytecode, Bytes, CreateScheme, Output, ResultAndState, TransactTo, TxEnv, B256,
+        hex, AccountInfo, Address, Bytecode, Bytes, CreateScheme, Output, ResultAndState,
+        TransactTo, TxEnv, B256, U256,
     },
     Database, EVM,
 };

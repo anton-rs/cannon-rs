@@ -24,7 +24,7 @@ command-fds = "0.2.3"
 tracing = { version = "0.1.40", optional = true }
 
 [dev-dependencies]
-proptest = "1.2.0"
+proptest = "1.4.0"
 
 [features]
 tracing = ["dep:tracing"]
