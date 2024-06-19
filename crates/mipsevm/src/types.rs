@@ -19,7 +19,7 @@ pub type PageIndex = u64;
 pub type Gindex = u64;
 
 /// An [Address] is a 32 bit address in the MIPS emulator's memory.
-pub type Address = u32;
+pub type Address = u64;
 
 /// The [VMStatus] is an indicator within the [StateWitness] hash that indicates
 /// the current status of the MIPS emulator.
@@ -71,10 +71,10 @@ pub enum Syscall {
     Fcntl = 4055,
 }
 
-impl TryFrom<u32> for Syscall {
+impl TryFrom<u64> for Syscall {
     type Error = anyhow::Error;
 
-    fn try_from(n: u32) -> Result<Self, Self::Error> {
+    fn try_from(n: u64) -> Result<Self, Self::Error> {
         match n {
             4090 => Ok(Syscall::Mmap),
             4045 => Ok(Syscall::Brk),

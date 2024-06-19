@@ -1,5 +1,6 @@
 //! This module contains the various witness types.
 
+use crate::memory::PROOF_LEN;
 use crate::{utils::keccak256, State, StateWitness, StateWitnessHasher};
 use alloy_primitives::{B256, U256};
 use alloy_sol_types::{sol, SolCall};
@@ -7,12 +8,12 @@ use preimage_oracle::KeyType;
 use revm::primitives::Bytes;
 
 /// The size of an encoded [StateWitness] in bytes.
-pub const STATE_WITNESS_SIZE: usize = 226;
+pub const STATE_WITNESS_SIZE: usize = 378;
 
 impl StateWitnessHasher for StateWitness {
     fn state_hash(&self) -> [u8; 32] {
         let mut hash = keccak256(self);
-        let offset = 32 * 2 + 4 * 6;
+        let offset = 32 * 2 + 8 * 6;
         let exit_code = self[offset];
         let exited = self[offset + 1] == 1;
         hash[0] = State::vm_status(exited, exit_code) as u8;
@@ -33,14 +34,14 @@ pub struct StepWitness {
     /// The preimage value
     pub preimage_value: Option<Vec<u8>>,
     /// The preimage offset
-    pub preimage_offset: Option<u32>,
+    pub preimage_offset: Option<u64>,
 }
 
 impl Default for StepWitness {
     fn default() -> Self {
         Self {
             state: [0u8; crate::witness::STATE_WITNESS_SIZE],
-            mem_proof: Vec::with_capacity(28 * 32 * 2),
+            mem_proof: Vec::with_capacity(PROOF_LEN * 32 * 2),
             preimage_key: Default::default(),
             preimage_value: Default::default(),
             preimage_offset: Default::default(),

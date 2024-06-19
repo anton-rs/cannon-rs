@@ -320,7 +320,7 @@ mod test {
                     let instruction = instrumented
                         .state
                         .memory
-                        .get_memory(instrumented.state.pc as Address)
+                        .get_memory_b4(instrumented.state.pc as Address)
                         .unwrap();
                     println!(
                         "{}",
@@ -347,8 +347,8 @@ mod test {
                     assert_eq!(END_ADDR, instrumented.state.pc, "must reach end");
                     let mut state = instrumented.state.memory;
                     let (done, result) = (
-                        state.get_memory((BASE_ADDR_END + 4) as Address).unwrap(),
-                        state.get_memory((BASE_ADDR_END + 8) as Address).unwrap(),
+                        state.get_memory_b4((BASE_ADDR_END + 4) as Address).unwrap(),
+                        state.get_memory_b4((BASE_ADDR_END + 8) as Address).unwrap(),
                     );
                     assert_eq!(done, 1, "must set done to 1");
                     assert_eq!(result, 1, "must have success result {:?}", f.file_name());
@@ -385,7 +385,7 @@ mod test {
             let mut state = State::default();
             state.pc = pc;
             state.next_pc = next_pc;
-            state.memory.set_memory(pc, instruction).unwrap();
+            state.memory.set_memory_b4(pc, instruction).unwrap();
 
             let mut instrumented = InstrumentedState::new(
                 state,
@@ -420,7 +420,7 @@ mod test {
                 next_pc: next_pc as Address,
                 ..Default::default()
             };
-            state.memory.set_memory(0, instruction).unwrap();
+            state.memory.set_memory_b4(0, instruction).unwrap();
 
             // Set the return address ($ra) to jump to when the test completes.
             state.registers[31] = END_ADDR;
@@ -472,7 +472,7 @@ mod test {
                 let instruction = instrumented
                     .state
                     .memory
-                    .get_memory(instrumented.state.pc as Address)
+                    .get_memory_b4(instrumented.state.pc as Address)
                     .unwrap();
                 println!(
                     "step: {} pc: 0x{:08x} instruction: {:08x}",
@@ -516,7 +516,7 @@ mod test {
                 let instruction = instrumented
                     .state
                     .memory
-                    .get_memory(instrumented.state.pc as Address)
+                    .get_memory_b4(instrumented.state.pc as Address)
                     .unwrap();
                 println!(
                     "step: {} pc: 0x{:08x} instruction: {:08x}",

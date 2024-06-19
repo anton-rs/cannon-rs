@@ -17,17 +17,17 @@ pub struct State {
     #[serde(with = "crate::ser::fixed_32_hex")]
     pub preimage_key: [u8; 32],
     /// The preimage offset.
-    pub preimage_offset: u32,
+    pub preimage_offset: u64,
     /// The current program counter.
-    pub pc: u32,
+    pub pc: u64,
     /// The next program counter.
-    pub next_pc: u32,
+    pub next_pc: u64,
     /// The lo register
-    pub lo: u32,
+    pub lo: u64,
     /// The hi register
-    pub hi: u32,
+    pub hi: u64,
     /// The heap pointer
-    pub heap: u32,
+    pub heap: u64,
     /// The exit code of the MIPS emulator.
     pub exit_code: u8,
     /// The exited status of the MIPS emulator.
@@ -35,7 +35,7 @@ pub struct State {
     /// The current step of the MIPS emulator.
     pub step: u64,
     /// The MIPS emulator's registers.
-    pub registers: [u32; 32],
+    pub registers: [u64; 32],
     /// The last hint sent to the host.
     #[serde(with = "crate::ser::vec_u8_hex")]
     pub last_hint: Vec<u8>,
@@ -50,18 +50,18 @@ impl State {
         let mut witness: StateWitness = [0u8; STATE_WITNESS_SIZE];
         witness[..32].copy_from_slice(self.memory.merkle_root()?.as_slice());
         witness[32..64].copy_from_slice(self.preimage_key.as_slice());
-        witness[64..68].copy_from_slice(&self.preimage_offset.to_be_bytes());
-        witness[68..72].copy_from_slice(&self.pc.to_be_bytes());
-        witness[72..76].copy_from_slice(&self.next_pc.to_be_bytes());
-        witness[76..80].copy_from_slice(&self.lo.to_be_bytes());
-        witness[80..84].copy_from_slice(&self.hi.to_be_bytes());
-        witness[84..88].copy_from_slice(&self.heap.to_be_bytes());
-        witness[88] = self.exit_code;
-        witness[89] = self.exited as u8;
-        witness[90..98].copy_from_slice(&self.step.to_be_bytes());
+        witness[64..72].copy_from_slice(&self.preimage_offset.to_be_bytes());
+        witness[72..80].copy_from_slice(&self.pc.to_be_bytes());
+        witness[80..88].copy_from_slice(&self.next_pc.to_be_bytes());
+        witness[88..96].copy_from_slice(&self.lo.to_be_bytes());
+        witness[96..104].copy_from_slice(&self.hi.to_be_bytes());
+        witness[104..112].copy_from_slice(&self.heap.to_be_bytes());
+        witness[112] = self.exit_code;
+        witness[113] = self.exited as u8;
+        witness[114..122].copy_from_slice(&self.step.to_be_bytes());
         for (i, r) in self.registers.iter().enumerate() {
-            let start = 98 + i * 4;
-            witness[start..start + 4].copy_from_slice(&r.to_be_bytes());
+            let start = 122 + i * 8;
+            witness[start..start + 8].copy_from_slice(&r.to_be_bytes());
         }
         Ok(witness)
     }

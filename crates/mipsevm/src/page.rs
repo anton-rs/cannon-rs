@@ -8,7 +8,7 @@ use once_cell::sync::Lazy;
 use crate::utils::keccak256;
 
 pub(crate) const PAGE_ADDRESS_SIZE: usize = 12;
-pub(crate) const PAGE_KEY_SIZE: usize = 32 - PAGE_ADDRESS_SIZE;
+pub(crate) const PAGE_KEY_SIZE: usize = 64 - PAGE_ADDRESS_SIZE;
 pub(crate) const PAGE_SIZE: usize = 1 << PAGE_ADDRESS_SIZE;
 pub(crate) const PAGE_SIZE_WORDS: usize = PAGE_SIZE >> 5;
 pub(crate) const PAGE_ADDRESS_MASK: usize = PAGE_SIZE - 1;

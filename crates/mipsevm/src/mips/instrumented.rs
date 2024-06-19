@@ -1,11 +1,12 @@
 //! This module contains the [InstrumentedState] definition.
 
+use crate::memory::PROOF_LEN;
 use crate::{traits::PreimageOracle, Address, State, StepWitness};
 use anyhow::Result;
 use std::io::{BufWriter, Write};
 
-pub(crate) const MIPS_EBADF: u32 = 0x9;
-pub(crate) const MIPS_EINVAL: u32 = 0x16;
+pub(crate) const MIPS_EBADF: u64 = 0x9;
+pub(crate) const MIPS_EINVAL: u64 = 0x16;
 
 /// The [InstrumentedState] is a wrapper around [State] that contains cached machine state,
 /// the input and output buffers, and an implementation of the MIPS VM.
@@ -25,16 +26,16 @@ pub struct InstrumentedState<O: Write, E: Write, P: PreimageOracle> {
     /// Whether or not the memory proof generation is enabled.
     pub(crate) mem_proof_enabled: bool,
     /// The memory proof, if it is enabled.
-    pub(crate) mem_proof: [u8; 28 * 32],
+    pub(crate) mem_proof: [u8; PROOF_LEN * 32],
     /// The [PreimageOracle] used to fetch preimages.
     pub(crate) preimage_oracle: P,
     /// Cached pre-image data, including 8 byte length prefix
     pub(crate) last_preimage: Vec<u8>,
     /// Key for the above preimage
     pub(crate) last_preimage_key: [u8; 32],
-    /// The offset we last read from, or max u32 if nothing is read at
+    /// The offset we last read from, or max u64 if nothing is read at
     /// the current step.
-    pub(crate) last_preimage_offset: u32,
+    pub(crate) last_preimage_offset: u64,
 }
 
 impl<O, E, P> InstrumentedState<O, E, P>
@@ -50,7 +51,7 @@ where
             std_err: BufWriter::new(std_err),
             last_mem_access: 0,
             mem_proof_enabled: false,
-            mem_proof: [0u8; 28 * 32],
+            mem_proof: [0u8; PROOF_LEN * 32],
             preimage_oracle: oracle,
             last_preimage: Vec::default(),
             last_preimage_key: [0u8; 32],
@@ -66,15 +67,15 @@ where
     #[inline(always)]
     pub fn step(&mut self, proof: bool) -> Result<Option<StepWitness>> {
         self.mem_proof_enabled = proof;
-        self.last_mem_access = !0u32 as Address;
-        self.last_preimage_offset = !0u32;
+        self.last_mem_access = !0u64 as Address;
+        self.last_preimage_offset = !0u64;
 
         let mut witness = None;
         if proof {
             let instruction_proof = self.state.memory.merkle_proof(self.state.pc as Address)?;
 
-            let mut mem_proof = vec![0; 28 * 32 * 2];
-            mem_proof[0..28 * 32].copy_from_slice(instruction_proof.as_slice());
+            let mut mem_proof = vec![0; PROOF_LEN * 32 * 2];
+            mem_proof[0..PROOF_LEN * 32].copy_from_slice(instruction_proof.as_slice());
             witness = Some(StepWitness {
                 state: self.state.encode_witness()?,
                 mem_proof,
@@ -86,8 +87,8 @@ where
 
         if proof {
             witness = witness.map(|mut wit| {
-                wit.mem_proof[28 * 32..].copy_from_slice(self.mem_proof.as_slice());
-                if self.last_preimage_offset != u32::MAX {
+                wit.mem_proof[PROOF_LEN * 32..].copy_from_slice(self.mem_proof.as_slice());
+                if self.last_preimage_offset != u64::MAX {
                     wit.preimage_key = Some(self.last_preimage_key);
                     wit.preimage_value = Some(self.last_preimage.clone());
                     wit.preimage_offset = Some(self.last_preimage_offset);
@@ -185,8 +186,8 @@ mod test {
                         assert_eq!(END_ADDR, ins.state.pc, "must reach end");
                         let mut state = ins.state.memory;
                         let (done, result) = (
-                            state.get_memory((BASE_ADDR_END + 4) as Address).unwrap(),
-                            state.get_memory((BASE_ADDR_END + 8) as Address).unwrap(),
+                            state.get_memory_b4((BASE_ADDR_END + 4) as Address).unwrap(),
+                            state.get_memory_b4((BASE_ADDR_END + 8) as Address).unwrap(),
                         );
                         assert_eq!(done, 1, "must set done to 1");
                         assert_eq!(result, 1, "must have success result {:?}", f.file_name());
@@ -223,8 +224,8 @@ mod test {
             let mut expected_witness = [0u8; STATE_WITNESS_SIZE];
             let mem_root = state.memory.merkle_root().unwrap();
             expected_witness[..32].copy_from_slice(mem_root.as_slice());
-            expected_witness[32 * 2 + 4 * 6] = exit_code;
-            expected_witness[32 * 2 + 4 * 6 + 1] = exited as u8;
+            expected_witness[32 * 2 + 8 * 6] = exit_code;
+            expected_witness[32 * 2 + 8 * 6 + 1] = exited as u8;
 
             assert_eq!(actual_witness, expected_witness, "Incorrect witness");
 

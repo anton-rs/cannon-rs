@@ -18,7 +18,7 @@ pub struct Proof {
     pub step_input: Vec<u8>,
     pub oracle_key: Option<Vec<u8>>,
     pub oracle_value: Option<Vec<u8>>,
-    pub oracle_offset: Option<u32>,
+    pub oracle_offset: Option<u64>,
     pub oracle_input: Option<Vec<u8>>,
 }
 

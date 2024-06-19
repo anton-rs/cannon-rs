@@ -1,5 +1,6 @@
 //! This module contains the MIPS VM implementation for the [InstrumentedState].
 
+use crate::utils::sign_extend;
 use crate::{
     memory::MemoryReader,
     mips::instrumented::{MIPS_EBADF, MIPS_EINVAL},
@@ -29,7 +30,7 @@ where
     pub(crate) fn read_preimage(
         &mut self,
         key: [u8; 32],
-        offset: u32,
+        offset: u64,
     ) -> Result<([u8; 32], usize)> {
         if key != self.last_preimage_key {
             let data = self.preimage_oracle.get(key)?;
@@ -74,7 +75,7 @@ where
     ///
     /// ### Returns
     /// - A [Result] indicating if the step was successful.
-    #[inline(always)]
+    // #[inline(always)]
     pub(crate) fn inner_step(&mut self) -> Result<()> {
         if self.state.exited {
             return Ok(());
@@ -83,7 +84,7 @@ where
         self.state.step += 1;
 
         // Fetch the instruction
-        let instruction = self.state.memory.get_memory(self.state.pc as Address)?;
+        let instruction = self.state.memory.get_memory_b4(self.state.pc as Address)?;
         let opcode = instruction >> 26;
 
         // j-type j/jal
@@ -91,7 +92,8 @@ where
             let link_reg = if opcode == 3 { 31 } else { 0 };
             // Take the top 4 bits of the next PC (its 256MB region), and concatenate with the
             // 26-bit offset
-            let target = self.state.next_pc & 0xF0000000 | ((instruction & 0x03FFFFFF) << 2);
+            let target = self.state.next_pc & 0xFFFFFFFFF0000000
+                | (((instruction & 0x03FFFFFF) << 2) as u64);
             return self.handle_jump(link_reg, target);
         }
 
@@ -111,10 +113,10 @@ where
             // Don't sign extend for andi, ori, xori
             if (0x0c..=0x0e).contains(&opcode) {
                 // ZeroExtImm
-                rt = instruction & 0xFFFF;
+                rt = (instruction & 0xFFFF) as u64;
             } else {
                 // SignExtImm
-                rt = sign_extend(instruction & 0xFFFF, 16);
+                rt = sign_extend((instruction & 0xFFFF) as u64, 16);
             }
         } else if opcode >= 0x28 || [0x22, 0x26].contains(&opcode) {
             // Store rt value with store
@@ -128,14 +130,14 @@ where
             return self.handle_branch(opcode, instruction, rt_reg, rs);
         }
 
-        let mut store_address: u32 = 0xFFFFFFFF;
+        let mut store_address: u64 = 0xFFFFFFFFFFFFFFFF;
         let mut mem = 0;
         // Memory fetch (all I-type)
         // We also do the load for stores
         if opcode >= 0x20 {
             // M[R[rs]+SignExtImm]
-            rs += sign_extend(instruction & 0xFFFF, 16);
-            let address = rs & 0xFFFFFFFC;
+            rs += sign_extend((instruction & 0xFFFF) as u64, 16);
+            let address = rs & 0xFFFFFFFFFFFFFFF8;
             self.track_mem_access(address as Address)?;
 
             mem = self.state.memory.get_memory(address as Address)?;
@@ -183,7 +185,7 @@ where
         }
 
         // Write memory
-        if store_address != 0xFFFFFFFF {
+        if store_address != 0xFFFFFFFFFFFFFFFF {
             self.track_mem_access(store_address as Address)?;
             self.state
                 .memory
@@ -216,9 +218,9 @@ where
 
                     // Adjust the size to align with the page size if the size
                     // cannot fit within the page address mask.
-                    let masked_size = sz & page::PAGE_ADDRESS_MASK as u32;
+                    let masked_size = sz & page::PAGE_ADDRESS_MASK as u64;
                     if masked_size != 0 {
-                        sz += page::PAGE_SIZE as u32 - masked_size;
+                        sz += page::PAGE_SIZE as u64 - masked_size;
                     }
 
                     if a0 == 0 {
@@ -245,10 +247,10 @@ where
                         // Nothing to do; Leave v0 and v1 zero, read nothing, and give no error.
                     }
                     Ok(Fd::PreimageRead) => {
-                        let effective_address = (a1 & 0xFFFFFFFC) as Address;
+                        let effective_address = (a1 & 0xFFFFFFFFFFFFFFFC) as Address;
 
                         self.track_mem_access(effective_address)?;
-                        let memory = self.state.memory.get_memory(effective_address)?;
+                        let memory = self.state.memory.get_memory_b4(effective_address)?;
 
                         let (data, mut data_len) = self
                             .read_preimage(self.state.preimage_key, self.state.preimage_offset)?;
@@ -266,9 +268,9 @@ where
                         out_mem[alignment..alignment + data_len].copy_from_slice(&data[..data_len]);
                         self.state
                             .memory
-                            .set_memory(effective_address, u32::from_be_bytes(out_mem))?;
-                        self.state.preimage_offset += data_len as u32;
-                        v0 = data_len as u32;
+                            .set_memory_b4(effective_address, u32::from_be_bytes(out_mem))?;
+                        self.state.preimage_offset += data_len as u64;
+                        v0 = data_len as u64;
                     }
                     Ok(Fd::HintRead) => {
                         // Don't actually read anything into memory, just say we read it. The
@@ -276,7 +278,7 @@ where
                         v0 = a2;
                     }
                     _ => {
-                        v0 = 0xFFFFFFFF;
+                        v0 = 0xFFFFFFFFFFFFFFFF;
                         v1 = MIPS_EBADF;
                     }
                 },
@@ -318,10 +320,13 @@ where
                         v0 = a2;
                     }
                     Ok(Fd::PreimageWrite) => {
-                        let effective_address = a1 & 0xFFFFFFFC;
+                        let effective_address = a1 & 0xFFFFFFFFFFFFFFFC;
                         self.track_mem_access(effective_address as Address)?;
 
-                        let memory = self.state.memory.get_memory(effective_address as Address)?;
+                        let memory = self
+                            .state
+                            .memory
+                            .get_memory_b4(effective_address as Address)?;
                         let mut key = self.state.preimage_key;
                         let alignment = a1 & 0x3;
                         let space = 4 - alignment;
@@ -345,7 +350,7 @@ where
                         v0 = a2;
                     }
                     _ => {
-                        v0 = 0xFFFFFFFF;
+                        v0 = 0xFFFFFFFFFFFFFFFF;
                         v1 = MIPS_EBADF;
                     }
                 },
@@ -359,13 +364,13 @@ where
                                 v0 = 1; // O_WRONLY
                             }
                             _ => {
-                                v0 = 0xFFFFFFFF;
+                                v0 = 0xFFFFFFFFFFFFFFFF;
                                 v1 = MIPS_EBADF;
                             }
                         }
                     } else {
                         // The command is not recognized by this kernel.
-                        v0 = 0xFFFFFFFF;
+                        v0 = 0xFFFFFFFFFFFFFFFF;
                         v1 = MIPS_EINVAL;
                     }
                 }
@@ -397,7 +402,7 @@ where
         opcode: u32,
         instruction: u32,
         rt_reg: u32,
-        rs: u32,
+        rs: u64,
     ) -> Result<()> {
         if self.state.next_pc != self.state.pc + 4 {
             anyhow::bail!("Unexpected branch in delay slot at {:x}", self.state.pc,);
@@ -434,7 +439,8 @@ where
         self.state.pc = self.state.next_pc;
 
         if should_branch {
-            self.state.next_pc = prev_pc + 4 + (sign_extend(instruction & 0xFFFF, 16) << 2);
+            self.state.next_pc =
+                prev_pc + 4 + (sign_extend((instruction & 0xFFFF) as u64, 16) << 2);
         } else {
             // Branch not taken; proceed as normal.
             self.state.next_pc += 4;
@@ -457,8 +463,8 @@ where
     pub(crate) fn handle_hi_lo(
         &mut self,
         fun: u32,
-        rs: u32,
-        rt: u32,
+        rs: u64,
+        rt: u64,
         store_reg: u32,
     ) -> Result<()> {
         let val = match fun {
@@ -483,27 +489,27 @@ where
             0x18 => {
                 // mult
                 let acc = ((rs as i32) as i64) as u64 * ((rt as i32) as i64) as u64;
-                self.state.hi = (acc >> 32) as u32;
-                self.state.lo = acc as u32;
+                self.state.hi = sign_extend(acc >> 32, 32);
+                self.state.lo = sign_extend((acc as u32) as u64, 32);
                 0
             }
             0x19 => {
                 // multu
-                let acc = rs as u64 * rt as u64;
-                self.state.hi = (acc >> 32) as u32;
-                self.state.lo = acc as u32;
+                let acc = (rs as u32) as u64 * (rt as u32) as u64;
+                self.state.hi = sign_extend(acc >> 32, 32);
+                self.state.lo = sign_extend((acc as u32) as u64, 32);
                 0
             }
             0x1a => {
                 // div
-                self.state.hi = (rs as i32 % rt as i32) as u32;
-                self.state.lo = (rs as i32 / rt as i32) as u32;
+                self.state.hi = sign_extend((rs as i32 % rt as i32) as u64, 32);
+                self.state.lo = sign_extend((rs as i32 / rt as i32) as u64, 32);
                 0
             }
             0x1b => {
                 // divu
-                self.state.hi = rs % rt;
-                self.state.lo = rs / rt;
+                self.state.hi = sign_extend((rs as u32 % rt as u32) as u64, 32);
+                self.state.lo = sign_extend((rs as u32 / rt as u32) as u64, 32);
                 0
             }
             _ => 0,
@@ -528,7 +534,7 @@ where
     /// ### Returns
     /// - A [Result] indicating if the branch dispatch was successful.
     #[inline(always)]
-    pub(crate) fn handle_jump(&mut self, link_reg: u32, dest: u32) -> Result<()> {
+    pub(crate) fn handle_jump(&mut self, link_reg: u32, dest: u64) -> Result<()> {
         if self.state.next_pc != self.state.pc + 4 {
             anyhow::bail!("Unexpected jump in delay slot at {:x}", self.state.pc);
         }
@@ -552,7 +558,7 @@ where
     /// ### Returns
     /// - A [Result] indicating if the branch dispatch was successful.
     #[inline(always)]
-    pub(crate) fn handle_rd(&mut self, store_reg: u32, val: u32, conditional: bool) -> Result<()> {
+    pub(crate) fn handle_rd(&mut self, store_reg: u32, val: u64, conditional: bool) -> Result<()> {
         if store_reg >= 32 {
             anyhow::bail!("Invalid register index {}", store_reg);
         }
@@ -578,7 +584,7 @@ where
     /// - `Ok(n)` - The result of the instruction execution.
     /// - `Err(_)`: An error occurred while executing the instruction.
     #[inline(always)]
-    pub(crate) fn execute(&mut self, instruction: u32, rs: u32, rt: u32, mem: u32) -> Result<u32> {
+    pub(crate) fn execute(&mut self, instruction: u32, rs: u64, rt: u64, mem: u64) -> Result<u64> {
         // Opcodes in MIPS are 6 bits in size, and stored in the high-order bits of the big-endian
         // instruction.
         let opcode = instruction >> 26;
@@ -604,19 +610,29 @@ where
 
             match fun {
                 // sll
-                0 => Ok(rt << ((instruction >> 6) & 0x1F)),
+                0 => Ok(sign_extend(
+                    (rt & 0xFFFFFFFF) << ((instruction >> 6) & 0x1F),
+                    32,
+                )),
                 // srl
-                2 => Ok(rt >> ((instruction >> 6) & 0x1F)),
+                2 => Ok(sign_extend(
+                    (rt & 0xFFFFFFFF) >> ((instruction >> 6) & 0x1F),
+                    32,
+                )),
                 // sra
                 3 => {
                     let shamt = (instruction >> 6) & 0x1F;
-                    Ok(sign_extend(rt >> shamt, 32 - shamt))
+                    Ok(sign_extend((rt & 0xFFFFFFFF) >> shamt, (32 - shamt) as u64))
                 }
-                // sslv
-                4 => Ok(rt << (rs & 0x1F)),
+                // sllv
+                4 => Ok(sign_extend((rt & 0xFFFFFFFF) << (rs & 0x1F), 32)),
                 // srlv
-                6 => Ok(rt >> (rs & 0x1F)),
-                7 => Ok(sign_extend(rt >> rs, 32 - rs)),
+                6 => Ok(sign_extend((rt & 0xFFFFFFFF) >> (rs & 0x1F), 32)),
+                // srav
+                7 => {
+                    let shamt = rs & 0x1F;
+                    Ok(sign_extend((rt & 0xFFFFFFFF) >> shamt, 32 - shamt))
+                }
 
                 // Functions in range [0x8, 0x1b] are handled specially by other functions.
 
@@ -627,9 +643,9 @@ where
                 // The rest are transformed R-type arithmetic imm instructions.
 
                 // add / addu
-                0x20 | 0x21 => Ok(rs + rt),
+                0x20 | 0x21 => Ok(sign_extend(rs + rt, 32)),
                 // sub / subu
-                0x22 | 0x23 => Ok(rs - rt),
+                0x22 | 0x23 => Ok(sign_extend(rs - rt, 32)),
                 // and
                 0x24 => Ok(rs & rt),
                 // or
@@ -639,9 +655,9 @@ where
                 // nor
                 0x27 => Ok(!(rs | rt)),
                 // slti
-                0x2a => Ok(((rs as i32) < (rt as i32)) as u32),
+                0x2a => Ok(((rs as i32) < (rt as i32)) as u64),
                 // sltiu
-                0x2b => Ok((rs < rt) as u32),
+                0x2b => Ok(((rs as u32) < (rt as u32)) as u64),
                 _ => anyhow::bail!("Invalid function code {:x}", fun),
             }
         } else {
@@ -651,14 +667,14 @@ where
                     let fun = instruction & 0x3F;
                     match fun {
                         // mul
-                        0x02 => Ok(((rs as i32) * (rt as i32)) as u32),
-                        // clo
+                        0x02 => Ok(sign_extend(((rs as i32) * (rt as i32)) as u64, 32)),
+                        // clo / clz
                         0x20 | 0x21 => {
                             let mut rs = rs;
                             if fun == 0x20 {
                                 rs = !rs;
                             }
-                            let mut i = 0u32;
+                            let mut i = 0u64;
 
                             // TODO(clabby): Remove loop, do some good ol' bit twiddling instead.
                             while rs & 0x80000000 != 0 {
@@ -671,88 +687,92 @@ where
                     }
                 }
                 // lui
-                0x0F => Ok(rt << 16),
+                0x0F => Ok(sign_extend(rt << 16, 32)),
                 // lb
-                0x20 => Ok(sign_extend((mem >> (24 - ((rs & 0x3) << 3))) & 0xFF, 8)),
+                0x20 => Ok(sign_extend((mem >> (56 - ((rs & 0x7) << 3))) & 0xFF, 8)),
                 // lh
-                0x21 => Ok(sign_extend((mem >> (16 - ((rs & 0x2) << 3))) & 0xFFFF, 16)),
+                0x21 => Ok(sign_extend((mem >> (48 - ((rs & 0x6) << 3))) & 0xFFFF, 16)),
                 // lwl
                 0x22 => {
                     let sl = (rs & 0x3) << 3;
-                    let val = mem << sl;
-                    let mask = 0xFFFFFFFF << sl;
-                    Ok((rt & !mask) | val)
+                    let val = ((mem >> (32 - ((rs & 0x4) << 3))) << sl) & 0xFFFFFFFF;
+                    let mask = (0xFFFFFFFFu32 << sl) as u64;
+                    Ok(sign_extend((rt & !mask) | val, 32))
                 }
-                // lw
-                0x23 => Ok(mem),
+                // lw / ll
+                0x23 | 0x30 => Ok(sign_extend(
+                    (mem >> (32 - ((rs & 0x4) << 3))) & 0xFFFFFFFF,
+                    32,
+                )),
                 // lbu
-                0x24 => Ok((mem >> (24 - ((rs & 0x3) << 3))) & 0xFF),
+                0x24 => Ok((mem >> (56 - ((rs & 0x7) << 3))) & 0xFF),
                 // lhu
-                0x25 => Ok((mem >> (16 - ((rs & 0x2) << 3))) & 0xFFFF),
+                0x25 => Ok((mem >> (48 - ((rs & 0x6) << 3))) & 0xFFFF),
                 // lwr
                 0x26 => {
                     let sr = 24 - ((rs & 0x3) << 3);
-                    let val = mem >> sr;
-                    let mask = 0xFFFFFFFFu32 >> sr;
-                    Ok((rt & !mask) | val)
+                    let val = ((mem >> (32 - ((rs & 0x4) << 3))) >> sr) & 0xFFFFFFFF;
+                    let mask = (0xFFFFFFFFu32 >> sr) as u64;
+                    Ok(sign_extend((rt & !mask) | val, 32))
                 }
                 // sb
                 0x28 => {
-                    let sl = 24 - ((rs & 0x3) << 3);
+                    let sl = 56 - ((rs & 0x7) << 3);
                     let val = (rt & 0xFF) << sl;
-                    let mask = 0xFFFFFFFF ^ (0xFF << sl);
+                    let mask = 0xFFFFFFFFFFFFFFFF ^ (0xFF << sl);
                     Ok((mem & mask) | val)
                 }
                 // sh
                 0x29 => {
-                    let sl = 16 - ((rs & 0x2) << 3);
+                    let sl = 48 - ((rs & 0x6) << 3);
                     let val = (rt & 0xFFFF) << sl;
-                    let mask = 0xFFFFFFFF ^ (0xFFFF << sl);
+                    let mask = 0xFFFFFFFFFFFFFFFF ^ (0xFFFF << sl);
                     Ok((mem & mask) | val)
                 }
                 // swl
                 0x2a => {
                     let sr = (rs & 0x3) << 3;
-                    let val = rt >> sr;
-                    let mask = 0xFFFFFFFFu32 >> sr;
+                    let val = ((rt & 0xFFFFFFFF) >> sr) << (32 - ((rs & 0x4) << 3));
+                    let mask = ((0xFFFFFFFFu32 >> sr) as u64) << (32 - ((rs & 0x4) << 3));
                     Ok((mem & !mask) | val)
                 }
-                // sw
-                0x2b => Ok(rt),
+                // sw / sc
+                0x2b | 0x38 => {
+                    let sl = 32 - ((rs & 0x4) << 3);
+                    let val = (rt & 0xFFFFFFFF) << sl;
+                    let mask = 0xFFFFFFFFFFFFFFFF ^ (0xFFFFFFFF << sl);
+                    Ok((mem & mask) | val)
+                }
                 // swr
                 0x2e => {
                     let sl = 24 - ((rs & 0x3) << 3);
-                    let val = rt << sl;
-                    let mask = 0xFFFFFFFF << sl;
+                    let val = ((rt & 0xFFFFFFFF) << sl) << (32 - ((rs & 0x4) << 3));
+                    let mask = ((0xFFFFFFFFu32 << sl) as u64) << (32 - ((rs & 0x4) << 3));
                     Ok((mem & !mask) | val)
                 }
-                // ll
-                0x30 => Ok(mem),
-                // sc
-                0x38 => Ok(rt),
                 _ => anyhow::bail!("Invalid opcode {:x}", opcode),
             }
         }
     }
 }
-
-/// Perform a sign extension of a value embedded in the lower bits of `data` up to
-/// the `index`th bit.
-///
-/// ### Takes
-/// - `data`: The data to sign extend.
-/// - `index`: The index of the bit to sign extend to.
-///
-/// ### Returns
-/// - The sign extended value.
-#[inline(always)]
-pub(crate) fn sign_extend(data: u32, index: u32) -> u32 {
-    let is_signed = (data >> (index - 1)) != 0;
-    let signed = ((1 << (32 - index)) - 1) << index;
-    let mask = (1 << index) - 1;
-    if is_signed {
-        (data & mask) | signed
-    } else {
-        data & mask
-    }
-}
+//
+// /// Perform a sign extension of a value embedded in the lower bits of `data` up to
+// /// the `index`th bit.
+// ///
+// /// ### Takes
+// /// - `data`: The data to sign extend.
+// /// - `index`: The index of the bit to sign extend to.
+// ///
+// /// ### Returns
+// /// - The sign extended value.
+// #[inline(always)]
+// pub(crate) fn sign_extend(data: u64, index: u64) -> u64 {
+//     let is_signed = (data >> (index - 1)) != 0;
+//     let signed = ((1 << (64 - index)) - 1) << index;
+//     let mask = (1 << index) - 1;
+//     if is_signed {
+//         (data & mask) | signed
+//     } else {
+//         data & mask
+//     }
+// }

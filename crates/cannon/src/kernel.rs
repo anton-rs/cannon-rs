@@ -108,7 +108,7 @@ where
                         delta.subsec_millis(),
                         step,
                         self.ins_state.state.pc,
-                        self.ins_state.state.memory.get_memory(self.ins_state.state.pc)?,
+                        self.ins_state.state.memory.get_memory_b4(self.ins_state.state.pc)?,
                         (step - start_step) as f64 / delta.as_secs_f64(),
                         self.ins_state.state.memory.page_count(),
                         self.ins_state.state.memory.usage(),
