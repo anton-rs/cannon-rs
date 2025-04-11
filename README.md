@@ -9,7 +9,7 @@
 <p align="center">
   <a href="https://github.com/clabby/cannon-rs/actions/workflows/ci.yaml">
     <img src="https://github.com/clabby/cannon-rs/actions/workflows/ci.yaml/badge.svg?label=ci" alt="Ci">
-  </a>
+  <a href="https://github.com/op-rs/cannon-rs/blob/main/LICENSE.md">
   <img src="https://img.shields.io/badge/License-MIT-green.svg?label=license" alt="License">
   <a href="https://github.com/ethereum-optimism/monorepo"><img src="https://img.shields.io/badge/OP%20Stack-monorepo-red" alt="OP Stack"></a>
   <a href="https://t.me/+2yfSX0YikWMxNTRh"><img src="https://img.shields.io/badge/Telegram-x?logo=telegram&label=anton-rs%20contributors"></a>
